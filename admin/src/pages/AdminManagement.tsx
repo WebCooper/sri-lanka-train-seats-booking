@@ -26,9 +26,10 @@ import type {
   UpdateAdminPayload 
 } from '../api/adminManagementApi';
 import { AdminFormModal } from '../components/AdminFormModal';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../api/axiosInstance';
 import toast from 'react-hot-toast';
-import axios from 'axios';
 
 export const AdminManagement: React.FC = () => {
   const { user: currentLoggedAdmin } = useAuth();
@@ -40,9 +41,13 @@ export const AdminManagement: React.FC = () => {
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal State
+  // Form Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
+
+  // Delete Confirmation Modal State
+  const [deletingAdmin, setDeletingAdmin] = useState<AdminUser | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load admins from NestJS Backend API (GET /api/v1/admin/admins)
   const loadAdmins = useCallback(async (currentPage = 1, searchQuery = '') => {
@@ -58,12 +63,7 @@ export const AdminManagement: React.FC = () => {
       setPage(res.page);
       setTotalPages(res.totalPages || 1);
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        const msg = err.response?.data?.message || 'Failed to fetch administrator accounts.';
-        toast.error(msg);
-      } else if (err instanceof Error) {
-        toast.error(err.message);
-      }
+      toast.error(getApiErrorMessage(err, 'Failed to fetch administrator accounts.'));
     } finally {
       setIsLoading(false);
     }
@@ -114,36 +114,32 @@ export const AdminManagement: React.FC = () => {
       );
       loadAdmins(page, search);
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        toast.error(err.response?.data?.message || 'Failed to update status.');
-      } else {
-        toast.error('Failed to update admin status.');
-      }
+      toast.error(getApiErrorMessage(err, 'Failed to update administrator status.'));
     }
   };
 
-  // Handle Delete Admin (DELETE /api/v1/admin/admins/:id)
-  const handleDeleteAdmin = async (admin: AdminUser) => {
+  // Request Delete Admin (Opens ConfirmModal)
+  const handleRequestDeleteAdmin = (admin: AdminUser) => {
     if (admin.id === currentLoggedAdmin?.id) {
       toast.error('You cannot delete your own logged-in admin account.');
       return;
     }
+    setDeletingAdmin(admin);
+  };
 
-    const confirmed = window.confirm(
-      `Are you sure you want to delete administrator "${admin.name}" (${admin.email})?`
-    );
-    if (!confirmed) return;
-
+  // Confirm Delete Admin (Executes DELETE /api/v1/admin/admins/:id)
+  const handleConfirmDeleteAdmin = async () => {
+    if (!deletingAdmin) return;
+    setIsDeleting(true);
     try {
-      await deleteAdminApi(admin.id);
-      toast.success(`Administrator "${admin.name}" deleted successfully.`);
+      await deleteAdminApi(deletingAdmin.id);
+      toast.success(`Administrator "${deletingAdmin.name}" deleted successfully.`);
+      setDeletingAdmin(null);
       loadAdmins(page, search);
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        toast.error(err.response?.data?.message || 'Failed to delete admin account.');
-      } else {
-        toast.error('Failed to delete administrator account.');
-      }
+      toast.error(getApiErrorMessage(err, 'Failed to delete administrator account.'));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -342,7 +338,7 @@ export const AdminManagement: React.FC = () => {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteAdmin(admin)}
+                          onClick={() => handleRequestDeleteAdmin(admin)}
                           className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Delete Administrator"
                           disabled={admin.id === currentLoggedAdmin?.id}
@@ -393,6 +389,23 @@ export const AdminManagement: React.FC = () => {
         onSubmitCreate={handleCreateAdmin}
         onSubmitUpdate={handleUpdateAdmin}
         initialData={editingAdmin}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingAdmin)}
+        onClose={() => setDeletingAdmin(null)}
+        onConfirm={handleConfirmDeleteAdmin}
+        title="Delete Administrator Account"
+        message={
+          deletingAdmin
+            ? `Are you sure you want to delete administrator "${deletingAdmin.name}" (${deletingAdmin.email})? This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete Administrator"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
       />
     </div>
   );

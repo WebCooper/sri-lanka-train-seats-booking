@@ -47,30 +47,34 @@ export const DashboardOverview: React.FC = () => {
           </div>
         </Link>
 
-        {/* Additional Option Cards (Offline Modules) */}
-        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
-          <div>
-            <div className="flex items-start justify-between mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
-                <Train className="w-7 h-7" />
+        {/* Train & Line Management Card (Active Link) */}
+        <Link to="/dashboard/train-management" className="no-underline flex h-full group">
+          <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-white border border-slate-200/90 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-sky-500/10 hover:border-sky-300 transition-all duration-200 hover:-translate-y-1">
+            <div>
+              <div className="flex items-start justify-between mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center shadow-md shadow-sky-500/10">
+                  <Train className="w-7 h-7" />
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Active
+                </span>
               </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
-                Offline
-              </span>
+              <h2 className="text-xl font-bold text-slate-900 mb-2.5 group-hover:text-sky-600 transition-colors">
+                Train & Line Management
+              </h2>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Configure railway line routes, manage train fleets, assign route lines, and set coach seat reservations.
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
-              Train Schedules
-            </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Manage train routes, departure & arrival timetables, line stops, and coach allocations.
-            </p>
-          </div>
 
-          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
-            <span>Module Offline</span>
+            <div className="flex items-center justify-between pt-5 border-t border-slate-100 text-sm font-semibold text-sky-600 group-hover:text-sky-700">
+              <span>Open Module</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </div>
           </div>
-        </div>
+        </Link>
 
+        {/* Additional Option Cards (Offline Modules) */}
         <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
             <div className="flex items-start justify-between mb-6">

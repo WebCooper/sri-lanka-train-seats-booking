@@ -5,6 +5,7 @@ import { AdminLogin } from './components/AdminLogin';
 import { AdminLayout } from './components/AdminLayout';
 import { DashboardOverview } from './pages/DashboardOverview';
 import { AdminManagement } from './pages/AdminManagement';
+import { TrainManagement } from './pages/TrainManagement';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import './index.css';
@@ -92,6 +93,7 @@ export function App() {
           >
             <Route index element={<DashboardOverview />} />
             <Route path="admin-management" element={<AdminManagement />} />
+            <Route path="train-management" element={<TrainManagement />} />
           </Route>
 
           {/* Fallback Redirect */}

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authClient, useSession } from '../lib/auth-client';
 import type { UserProfile, SignInPayload } from '../api/auth';
+import { getApiErrorMessage } from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -28,11 +29,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!sessionPending) {
       if (session?.user) {
         const currentUser = session.user as UserProfile;
+        const token = session.session?.token;
+        if (token) {
+          localStorage.setItem('admin_token', token);
+        }
+
         if (isRoleAdmin(currentUser.role)) {
           setUser(currentUser);
         } else {
-          // If a non-admin session is active, sign out & notify
+          // If a non-admin session is active, revoke & sign out
           setUser(null);
+          localStorage.removeItem('admin_token');
           authClient.signOut();
           toast.error('Unauthorized access. Only admin accounts are permitted.');
         }
@@ -50,17 +57,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        const errorMsg = error.message || 'Invalid credentials.';
+        const errorMsg = error.message || 'Invalid email or password.';
         toast.error(errorMsg);
         return { success: false, error: errorMsg };
       }
 
       const loggedInUser = data?.user as UserProfile | undefined;
+      const sessionToken = data?.token || (data as any)?.session?.token;
+
+      if (sessionToken) {
+        localStorage.setItem('admin_token', sessionToken);
+      }
 
       if (!loggedInUser || !isRoleAdmin(loggedInUser.role)) {
-        // Revoke session if user is passenger or non-admin
         await authClient.signOut();
         setUser(null);
+        localStorage.removeItem('admin_token');
         const unauthMsg = 'Unauthorized access. Only admin accounts are permitted.';
         toast.error(unauthMsg);
         return { success: false, error: unauthMsg };
@@ -70,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Successfully authenticated as Admin!');
       return { success: true };
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      const errMsg = getApiErrorMessage(err, 'An unexpected error occurred during login.');
       toast.error(errMsg);
       return { success: false, error: errMsg };
     }
@@ -84,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Ignore
     } finally {
       setUser(null);
+      localStorage.removeItem('admin_token');
     }
   };
 

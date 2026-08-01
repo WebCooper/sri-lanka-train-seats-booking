@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, Shield, User, Mail, Lock, Phone, IdCard, Briefcase } from 'lucide-react';
 import type { AdminUser, CreateAdminPayload, UpdateAdminPayload } from '../api/adminManagementApi';
+import { getApiErrorMessage } from '../api/axiosInstance';
 import toast from 'react-hot-toast';
-import axios from 'axios';
 
 interface AdminFormModalProps {
   isOpen: boolean;
@@ -116,14 +116,7 @@ export const AdminFormModal: React.FC<AdminFormModalProps> = ({
       }
       onClose();
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        const msg = err.response?.data?.message || 'Operation failed.';
-        toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
-      } else if (err instanceof Error) {
-        toast.error(err.message);
-      } else {
-        toast.error('An unexpected error occurred.');
-      }
+      toast.error(getApiErrorMessage(err, 'Failed to save administrator details.'));
     } finally {
       setIsSubmitting(false);
     }
