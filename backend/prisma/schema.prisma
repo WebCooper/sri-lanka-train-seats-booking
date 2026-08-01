@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -77,4 +75,103 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Station {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  startLines        Line[]        @relation("StartStation")
+  endLines          Line[]        @relation("EndStation")
+  lineIntermediaries LineStation[]
+
+  @@map("station")
+}
+
+model Line {
+  id             String   @id @default(uuid())
+  name           String
+  startStationId String   @map("start_station_id")
+  startStation   Station  @relation("StartStation", fields: [startStationId], references: [id])
+  endStationId   String   @map("end_station_id")
+  endStation     Station  @relation("EndStation", fields: [endStationId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  stations  LineStation[]
+  trains    Train[]
+  schedules Schedule[]
+
+  @@map("line")
+}
+
+model LineStation {
+  id                String  @id @default(uuid())
+  lineId            String  @map("line_id")
+  line              Line    @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  stationId         String  @map("station_id")
+  station           Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  position          Int
+  distanceFromStart Float   @default(0) @map("distance_from_start")
+
+  @@unique([lineId, position])
+  @@map("line_station")
+}
+
+model Coach {
+  id         String       @id @default(uuid())
+  identifier String       @unique
+  seatCount  Int          @map("seat_count")
+  isReserved Boolean      @default(false) @map("is_reserved")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  trainCoaches TrainCoach[]
+
+  @@map("coach")
+}
+
+model Train {
+  id          String   @id @default(uuid())
+  name        String
+  trainNumber String   @unique @map("train_number")
+  lineId      String?  @map("line_id")
+  line        Line?    @relation(fields: [lineId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  coaches   TrainCoach[]
+  schedules Schedule[]
+
+  @@map("train")
+}
+
+model TrainCoach {
+  id       String @id @default(uuid())
+  trainId  String @map("train_id")
+  train    Train  @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  coachId  String @map("coach_id")
+  coach    Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  position Int
+
+  @@unique([trainId, position])
+  @@map("train_coach")
+}
+
+model Schedule {
+  id            String   @id @default(uuid())
+  lineId        String   @map("line_id")
+  line          Line     @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  trainId       String   @map("train_id")
+  train         Train    @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  departureTime DateTime @map("departure_time")
+  arrivalTime   DateTime @map("arrival_time")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("schedule")
 }
