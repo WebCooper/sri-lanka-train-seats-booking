@@ -20,14 +20,14 @@ import { TrainService } from './train.service';
 import { CreateTrainDto } from './dto/create-train.dto';
 import { UpdateTrainDto } from './dto/update-train.dto';
 import { QueryTrainDto } from './dto/query-train.dto';
-import { AdminOnly, RolesGuard } from '../../auth';
+import { AdminOnly, AuthGuard, RolesGuard } from '../../auth';
 
 @ApiTags('Admin - Trains')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('better-auth.session_token')
 @Controller('admin/trains')
 @AdminOnly()
-@UseGuards(RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class AdminTrainController {
   constructor(private readonly trainService: TrainService) {}
 

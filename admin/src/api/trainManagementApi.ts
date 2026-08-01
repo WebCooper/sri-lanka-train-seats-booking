@@ -1,32 +1,122 @@
+import axiosInstance from './axiosInstance';
+
+// Station Models
 export interface Station {
   id: string;
   name: string;
   code: string;
-  location?: string;
+  location?: string | null;
+  cumulativeDistance?: number;
 }
 
-export interface LineStation {
-  id?: string;
-  stationId: string;
-  stationName: string;
-  stationCode: string;
+export interface StationRef {
+  id: string;
+  name: string;
+  code: string;
+  location?: string | null;
+}
+
+export interface LineStationItem {
+  id: string;
+  name: string;
+  code: string;
+  location?: string | null;
   position: number;
-  distanceFromStart: number;
+  distance_from_start: number;
 }
 
 export interface RailwayLine {
   id: string;
   name: string;
-  startStationId: string;
-  startStationName: string;
-  startStationCode: string;
-  endStationId: string;
-  endStationName: string;
-  endStationCode: string;
-  stations: LineStation[];
-  createdAt: string;
+  start_station: StationRef;
+  end_station: StationRef;
+  total_intermediate_stations?: number;
+  stations: LineStationItem[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
+export interface IntermediateStationPayload {
+  station_id: string;
+  distance_from_start?: number;
+}
+
+export interface CreateLinePayload {
+  name: string;
+  start_station_id: string;
+  end_station_id: string;
+  stations?: IntermediateStationPayload[];
+}
+
+export interface UpdateLinePayload {
+  name?: string;
+  start_station_id?: string;
+  end_station_id?: string;
+  stations?: IntermediateStationPayload[];
+}
+
+// API Response Wrappers
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Stations API
+export const fetchStationsApi = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<PaginatedResponse<Station>> => {
+  const response = await axiosInstance.get<PaginatedResponse<Station>>('/api/v1/admin/stations', {
+    params,
+  });
+  return response.data;
+};
+
+// Fetch All Stations (for select dropdowns in line creation)
+export const fetchAllStationsApi = async (): Promise<Station[]> => {
+  const response = await axiosInstance.get<PaginatedResponse<Station>>('/api/v1/admin/stations', {
+    params: { page: 1, limit: 500 },
+  });
+  return response.data.data;
+};
+
+// Railway Lines API (GET, POST, PUT, DELETE /api/v1/admin/lines)
+export const fetchLinesApi = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<PaginatedResponse<RailwayLine>> => {
+  const response = await axiosInstance.get<PaginatedResponse<RailwayLine>>('/api/v1/admin/lines', {
+    params,
+  });
+  return response.data;
+};
+
+export const fetchLineByIdApi = async (id: string): Promise<RailwayLine> => {
+  const response = await axiosInstance.get<RailwayLine>(`/api/v1/admin/lines/${id}`);
+  return response.data;
+};
+
+export const createLineApi = async (payload: CreateLinePayload): Promise<RailwayLine> => {
+  const response = await axiosInstance.post<RailwayLine>('/api/v1/admin/lines', payload);
+  return response.data;
+};
+
+export const updateLineApi = async (id: string, payload: UpdateLinePayload): Promise<RailwayLine> => {
+  const response = await axiosInstance.put<RailwayLine>(`/api/v1/admin/lines/${id}`, payload);
+  return response.data;
+};
+
+export const deleteLineApi = async (id: string): Promise<{ message: string; id: string }> => {
+  const response = await axiosInstance.delete<{ message: string; id: string }>(`/api/v1/admin/lines/${id}`);
+  return response.data;
+};
+
+// Train Configuration Models (UI Frontend state)
 export interface CoachConfig {
   id: string;
   identifier: string;
@@ -48,75 +138,6 @@ export interface TrainConfig {
   createdAt: string;
 }
 
-// Pre-populated Sri Lanka Railway Stations
-export const INITIAL_STATIONS: Station[] = [
-  { id: 'st-1', name: 'Colombo Fort', code: 'FOT', location: 'Western Province' },
-  { id: 'st-2', name: 'Kandy', code: 'KDA', location: 'Central Province' },
-  { id: 'st-3', name: 'Nanu Oya', code: 'NOA', location: 'Central Province' },
-  { id: 'st-4', name: 'Ella', code: 'ELL', location: 'Uva Province' },
-  { id: 'st-5', name: 'Badulla', code: 'BDA', location: 'Uva Province' },
-  { id: 'st-6', name: 'Galle', code: 'GLE', location: 'Southern Province' },
-  { id: 'st-7', name: 'Matara', code: 'MTR', location: 'Southern Province' },
-  { id: 'st-8', name: 'Jaffna', code: 'JAF', location: 'Northern Province' },
-  { id: 'st-9', name: 'Kankesanthurai', code: 'KKE', location: 'Northern Province' },
-  { id: 'st-10', name: 'Peradeniya', code: 'PDA', location: 'Central Province' },
-];
-
-// Pre-populated Sri Lanka Railway Lines
-export const INITIAL_LINES: RailwayLine[] = [
-  {
-    id: 'line-1',
-    name: 'Main Line (Colombo - Badulla)',
-    startStationId: 'st-1',
-    startStationName: 'Colombo Fort',
-    startStationCode: 'FOT',
-    endStationId: 'st-5',
-    endStationName: 'Badulla',
-    endStationCode: 'BDA',
-    stations: [
-      { stationId: 'st-1', stationName: 'Colombo Fort', stationCode: 'FOT', position: 1, distanceFromStart: 0 },
-      { stationId: 'st-2', stationName: 'Kandy', stationCode: 'KDA', position: 2, distanceFromStart: 115 },
-      { stationId: 'st-3', stationName: 'Nanu Oya', stationCode: 'NOA', position: 3, distanceFromStart: 206 },
-      { stationId: 'st-4', stationName: 'Ella', stationCode: 'ELL', position: 4, distanceFromStart: 271 },
-      { stationId: 'st-5', stationName: 'Badulla', stationCode: 'BDA', position: 5, distanceFromStart: 292 },
-    ],
-    createdAt: '2026-01-10',
-  },
-  {
-    id: 'line-2',
-    name: 'Coastal Line (Colombo - Matara)',
-    startStationId: 'st-1',
-    startStationName: 'Colombo Fort',
-    startStationCode: 'FOT',
-    endStationId: 'st-7',
-    endStationName: 'Matara',
-    endStationCode: 'MTR',
-    stations: [
-      { stationId: 'st-1', stationName: 'Colombo Fort', stationCode: 'FOT', position: 1, distanceFromStart: 0 },
-      { stationId: 'st-6', stationName: 'Galle', stationCode: 'GLE', position: 2, distanceFromStart: 114 },
-      { stationId: 'st-7', stationName: 'Matara', stationCode: 'MTR', position: 3, distanceFromStart: 160 },
-    ],
-    createdAt: '2026-01-12',
-  },
-  {
-    id: 'line-3',
-    name: 'Northern Line (Colombo - Kankesanthurai)',
-    startStationId: 'st-1',
-    startStationName: 'Colombo Fort',
-    startStationCode: 'FOT',
-    endStationId: 'st-9',
-    endStationName: 'Kankesanthurai',
-    endStationCode: 'KKE',
-    stations: [
-      { stationId: 'st-1', stationName: 'Colombo Fort', stationCode: 'FOT', position: 1, distanceFromStart: 0 },
-      { stationId: 'st-8', stationName: 'Jaffna', stationCode: 'JAF', position: 2, distanceFromStart: 398 },
-      { stationId: 'st-9', stationName: 'Kankesanthurai', stationCode: 'KKE', position: 3, distanceFromStart: 414 },
-    ],
-    createdAt: '2026-01-15',
-  },
-];
-
-// Default 8-coach setup (3 reservable, 5 unreserved, 54 seats per coach)
 export const generateDefaultCoaches = (totalCoaches = 8, reservableCount = 3, seatsPerCoach = 54): CoachConfig[] => {
   return Array.from({ length: totalCoaches }, (_, index) => {
     const position = index + 1;
@@ -131,7 +152,6 @@ export const generateDefaultCoaches = (totalCoaches = 8, reservableCount = 3, se
   });
 };
 
-// Pre-populated Sri Lanka Trains
 export const INITIAL_TRAINS: TrainConfig[] = [
   {
     id: 'trn-1',

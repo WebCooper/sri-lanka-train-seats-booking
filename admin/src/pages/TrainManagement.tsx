@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import { 
   ChevronRight, 
@@ -11,30 +11,83 @@ import {
   Layers, 
   MapPin, 
   ArrowRight,
-  Ticket
+  Ticket,
+  Loader2,
+  ChevronLeft
 } from 'lucide-react';
 import { 
-  INITIAL_LINES, 
+  fetchLinesApi, 
+  createLineApi, 
+  updateLineApi, 
+  deleteLineApi,
+  fetchStationsApi,
   INITIAL_TRAINS
 } from '../api/trainManagementApi';
-import type { RailwayLine, TrainConfig } from '../api/trainManagementApi';
+import type { 
+  RailwayLine, 
+  CreateLinePayload, 
+  UpdateLinePayload,
+  TrainConfig
+} from '../api/trainManagementApi';
 import { LineModal } from '../components/LineModal';
 import { TrainConfigModal } from '../components/TrainConfigModal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { getApiErrorMessage } from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 
 export const TrainManagement: React.FC = () => {
-  // State for Railway Lines
-  const [lines, setLines] = useState<RailwayLine[]>(INITIAL_LINES);
+  // Lines API State
+  const [lines, setLines] = useState<RailwayLine[]>([]);
+  const [totalLines, setTotalLines] = useState(0);
+  const [linePage, setLinePage] = useState(1);
+  const [totalLinePages, setTotalLinePages] = useState(1);
+  const [isLoadingLines, setIsLoadingLines] = useState(true);
+
+  // Stations Total Count State
+  const [totalStationCount, setTotalStationCount] = useState(0);
+
+  // Line Modal State
   const [isLineModalOpen, setIsLineModalOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<RailwayLine | null>(null);
   const [deletingLine, setDeletingLine] = useState<RailwayLine | null>(null);
+  const [isDeletingLine, setIsDeletingLine] = useState(false);
 
-  // State for Train Configurations
+  // Train Configurations State (UI State)
   const [trains, setTrains] = useState<TrainConfig[]>(INITIAL_TRAINS);
   const [isTrainModalOpen, setIsTrainModalOpen] = useState(false);
   const [editingTrain, setEditingTrain] = useState<TrainConfig | null>(null);
   const [deletingTrain, setDeletingTrain] = useState<TrainConfig | null>(null);
+
+  // Fetch Lines from Backend API (GET /api/v1/admin/lines)
+  const loadLines = useCallback(async (page = 1) => {
+    setIsLoadingLines(true);
+    try {
+      const res = await fetchLinesApi({ page, limit: 10 });
+      setLines(res.data);
+      setTotalLines(res.total);
+      setLinePage(res.page);
+      setTotalLinePages(res.totalPages || 1);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to fetch railway lines from server.'));
+    } finally {
+      setIsLoadingLines(false);
+    }
+  }, []);
+
+  // Fetch Total Stations Count from Backend API (GET /api/v1/admin/stations)
+  const loadStationsCount = useCallback(async () => {
+    try {
+      const res = await fetchStationsApi({ page: 1, limit: 1 });
+      setTotalStationCount(res.total);
+    } catch {
+      // Ignore fallback
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLines(linePage);
+    loadStationsCount();
+  }, [loadLines, loadStationsCount, linePage]);
 
   // Line Handlers
   const handleOpenCreateLine = () => {
@@ -47,22 +100,39 @@ export const TrainManagement: React.FC = () => {
     setIsLineModalOpen(true);
   };
 
-  const handleSaveLine = (lineData: RailwayLine) => {
-    const existingIndex = lines.findIndex((l) => l.id === lineData.id);
-    if (existingIndex >= 0) {
-      const updated = [...lines];
-      updated[existingIndex] = lineData;
-      setLines(updated);
-    } else {
-      setLines([lineData, ...lines]);
+  const handleCreateLineSubmit = async (payload: CreateLinePayload) => {
+    try {
+      await createLineApi(payload);
+      loadLines(linePage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to create railway line.'));
+      throw err;
     }
   };
 
-  const handleConfirmDeleteLine = () => {
+  const handleUpdateLineSubmit = async (id: string, payload: UpdateLinePayload) => {
+    try {
+      await updateLineApi(id, payload);
+      loadLines(linePage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to update railway line.'));
+      throw err;
+    }
+  };
+
+  const handleConfirmDeleteLine = async () => {
     if (!deletingLine) return;
-    setLines(lines.filter((l) => l.id !== deletingLine.id));
-    toast.success(`Railway line "${deletingLine.name}" deleted.`);
-    setDeletingLine(null);
+    setIsDeletingLine(true);
+    try {
+      await deleteLineApi(deletingLine.id);
+      toast.success(`Railway line "${deletingLine.name}" deleted successfully.`);
+      setDeletingLine(null);
+      loadLines(linePage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete railway line.'));
+    } finally {
+      setIsDeletingLine(false);
+    }
   };
 
   // Train Handlers
@@ -127,18 +197,18 @@ export const TrainManagement: React.FC = () => {
             <Route className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">{lines.length}</div>
+            <div className="text-2xl font-bold text-slate-900">{totalLines}</div>
             <div className="text-xs text-slate-500 font-medium">Railway Lines</div>
           </div>
         </div>
 
         <div className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center shrink-0">
-            <Train className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+            <MapPin className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900">{trains.length}</div>
-            <div className="text-xs text-slate-500 font-medium">Configured Trains</div>
+            <div className="text-2xl font-bold text-slate-900">{totalStationCount || 257}</div>
+            <div className="text-xs text-slate-500 font-medium">Active Stations</div>
           </div>
         </div>
 
@@ -165,7 +235,7 @@ export const TrainManagement: React.FC = () => {
 
       {/* Two Main Cards Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* CARD 1: Railway Lines Management */}
+        {/* CARD 1: Railway Lines Management (Connected to NestJS API) */}
         <div className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm flex flex-col justify-between">
           <div>
             {/* Card Header */}
@@ -189,51 +259,89 @@ export const TrainManagement: React.FC = () => {
               </button>
             </div>
 
-            {/* Lines List */}
-            <div className="flex flex-col gap-3">
-              {lines.map((line) => (
-                <div
-                  key={line.id}
-                  className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl hover:bg-slate-100/70 transition-colors flex items-center justify-between gap-4"
-                >
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-slate-900 truncate">{line.name}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 shrink-0">
-                        {line.stations.length} Stops
-                      </span>
+            {/* Lines List Content */}
+            {isLoadingLines ? (
+              <div className="py-12 text-center text-slate-500">
+                <Loader2 className="w-7 h-7 animate-spin text-indigo-600 mx-auto mb-2" />
+                <p className="text-xs font-medium">Loading railway lines from backend...</p>
+              </div>
+            ) : lines.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                <Route className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <h3 className="text-sm font-semibold text-slate-800 mb-0.5">No Railway Lines Registered</h3>
+                <p className="text-xs">Click "Create Line" above to add your first train route.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {lines.map((line) => (
+                  <div
+                    key={line.id}
+                    className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl hover:bg-slate-100/70 transition-colors flex items-center justify-between gap-4"
+                  >
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-900 truncate">{line.name}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 shrink-0">
+                          {line.stations?.length || 0} Stops
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>
+                          <strong>{line.start_station?.name}</strong> ({line.start_station?.code})
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span>
+                          <strong>{line.end_station?.name}</strong> ({line.end_station?.code})
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                      <span>
-                        <strong>{line.startStationName}</strong> ({line.startStationCode})
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                      <span>
-                        <strong>{line.endStationName}</strong> ({line.endStationCode})
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleOpenEditLine(line)}
-                      className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
-                      title="Edit Railway Line"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingLine(line)}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                      title="Delete Railway Line"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditLine(line)}
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                        title="Edit Railway Line"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingLine(line)}
+                        className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Railway Line"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
+                ))}
+              </div>
+            )}
+
+            {/* Line Pagination Controls */}
+            {!isLoadingLines && totalLinePages > 1 && (
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
+                <span className="text-[11px] text-slate-500">
+                  Page {linePage} of {totalLinePages}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setLinePage((p) => Math.max(1, p - 1))}
+                    disabled={linePage <= 1}
+                    className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setLinePage((p) => Math.min(totalLinePages, p + 1))}
+                    disabled={linePage >= totalLinePages}
+                    className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -317,11 +425,12 @@ export const TrainManagement: React.FC = () => {
       <LineModal
         isOpen={isLineModalOpen}
         onClose={() => setIsLineModalOpen(false)}
-        onSave={handleSaveLine}
+        onSaveCreate={handleCreateLineSubmit}
+        onSaveUpdate={handleUpdateLineSubmit}
         initialData={editingLine}
       />
 
-      {/* Train Configuration Modal (Window for train name, line, coaches, seats) */}
+      {/* Train Configuration Modal */}
       <TrainConfigModal
         isOpen={isTrainModalOpen}
         onClose={() => setIsTrainModalOpen(false)}
@@ -338,12 +447,13 @@ export const TrainManagement: React.FC = () => {
         title="Delete Railway Line"
         message={
           deletingLine
-            ? `Are you sure you want to delete "${deletingLine.name}"? Trains assigned to this line will need to be re-assigned.`
+            ? `Are you sure you want to delete "${deletingLine.name}"? This action will remove the line route from the system.`
             : ''
         }
         confirmText="Delete Line"
         cancelText="Cancel"
         variant="danger"
+        isLoading={isDeletingLine}
       />
 
       {/* Delete Train Confirmation Modal */}

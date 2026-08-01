@@ -20,14 +20,14 @@ import { LineService } from './line.service';
 import { CreateLineDto } from './dto/create-line.dto';
 import { UpdateLineDto } from './dto/update-line.dto';
 import { QueryLineDto } from './dto/query-line.dto';
-import { AdminOnly, RolesGuard } from '../../auth';
+import { AdminOnly, AuthGuard, RolesGuard } from '../../auth';
 
 @ApiTags('Admin - Lines')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('better-auth.session_token')
 @Controller('admin/lines')
 @AdminOnly()
-@UseGuards(RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class AdminLineController {
   constructor(private readonly lineService: LineService) {}
 
