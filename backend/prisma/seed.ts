@@ -24,6 +24,12 @@ async function main() {
       password: adminPassword,
       name: adminName,
       role: 'admin',
+      data: {
+        title: 'Mr',
+        firstName: 'Super',
+        lastName: 'Administrator',
+        position: 'Chief Systems Administrator',
+      },
     },
   });
 

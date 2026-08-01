@@ -4,7 +4,6 @@ import { prisma } from '../../lib/prisma';
 import { admin } from "better-auth/plugins";
 import { bearer } from 'better-auth/plugins/bearer';
 
-
 const trustedOrigins = (
   process.env.BETTER_AUTH_TRUSTED_ORIGINS ??
   'http://localhost:3000,http://localhost:5173'
@@ -27,9 +26,33 @@ export const auth = betterAuth({
     additionalFields: {
       role: {
         type: "string",
-        defaultValue: "passenger"
-      }
-    }
+        defaultValue: "passenger",
+      },
+      title: {
+        type: "string",
+        required: false,
+      },
+      firstName: {
+        type: "string",
+        required: false,
+      },
+      lastName: {
+        type: "string",
+        required: false,
+      },
+      nicNumber: {
+        type: "string",
+        required: false,
+      },
+      mobileNumber: {
+        type: "string",
+        required: false,
+      },
+      position: {
+        type: "string",
+        required: false,
+      },
+    },
   },
   plugins: [
     admin({
@@ -38,5 +61,5 @@ export const auth = betterAuth({
       impersonation: true, // allows admins to impersonate passengers for support (optional)
     }),
     bearer(),
-  ]
+  ],
 });
