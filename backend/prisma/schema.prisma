@@ -86,12 +86,13 @@ model Verification {
 }
 
 model Station {
-  id        String   @id @default(uuid())
-  name      String
-  code      String   @unique
-  location  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  code               String   @unique
+  location           String?
+  cumulativeDistance Float    @default(0) @map("cumulative_distance")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   startLines         Line[]        @relation("StartStation")
   endLines           Line[]        @relation("EndStation")

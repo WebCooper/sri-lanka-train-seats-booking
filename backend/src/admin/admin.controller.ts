@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -16,18 +17,19 @@ import {
   ApiBearerAuth,
   ApiCookieAuth,
 } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { AdminService } from './admin.service';
 import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import { QueryAdminDto } from './dto/query-admin.dto';
-import { AdminOnly, CurrentUser, RolesGuard } from '../auth';
+import { AdminOnly, CurrentUser, AuthGuard, RolesGuard } from '../auth';
 
 @ApiTags('Admin - Management')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('better-auth.session_token')
 @Controller('admin')
 @AdminOnly()
-@UseGuards(RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -52,8 +54,11 @@ export class AdminController {
   @ApiOperation({ summary: 'Create a new administrator', description: 'Creates a user with admin role and credentials.' })
   @ApiResponse({ status: 201, description: 'Admin user created successfully.' })
   @ApiResponse({ status: 409, description: 'Conflict - Email already in use.' })
-  async createAdmin(@Body() dto: CreateAdminDto) {
-    return this.adminService.createAdmin(dto);
+  async createAdmin(
+    @Body() dto: CreateAdminDto,
+    @Req() req: Request,
+  ) {
+    return this.adminService.createAdmin(dto, req.headers as any);
   }
 
   /**
@@ -79,8 +84,9 @@ export class AdminController {
   async updateAdmin(
     @Param('id') id: string,
     @Body() dto: UpdateAdminDto,
+    @Req() req: Request,
   ) {
-    return this.adminService.updateAdmin(id, dto);
+    return this.adminService.updateAdmin(id, dto, req.headers as any);
   }
 
   /**
@@ -95,7 +101,8 @@ export class AdminController {
   async removeAdmin(
     @Param('id') id: string,
     @CurrentUser('id') currentAdminId: string,
+    @Req() req: Request,
   ) {
-    return this.adminService.removeAdmin(id, currentAdminId);
+    return this.adminService.removeAdmin(id, currentAdminId, req.headers as any);
   }
 }

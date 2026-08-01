@@ -1,44 +1,146 @@
 import 'dotenv/config';
-import { auth } from '../src/auth/auth';
+import * as fs from 'fs';
+import * as path from 'path';
 import { prisma } from '../lib/prisma';
 
+// Well-known Sri Lankan Railway station codes mapping
+const KNOWN_CODES: Record<string, string> = {
+  'colombo fort': 'FOT',
+  'maradana': 'MDA',
+  'ragama': 'RGM',
+  'gampaha': 'GPH',
+  'veyangoda': 'VGD',
+  'polgahawela': 'PLW',
+  'kurunegala': 'KGL',
+  'maho jnc': 'MHO',
+  'anuradhapura': 'ANP',
+  'vavniya': 'VAV',
+  'kilinochchi': 'KIL',
+  'jaffna': 'JAF',
+  'kankesanthurai': 'KKE',
+  'kankasnthurai': 'KKE2',
+  'kandy': 'KDA',
+  'peradeniya jnc': 'PDA',
+  'gampola': 'GPL',
+  'hatton': 'HTN',
+  'nanuoya': 'NOA',
+  'ambewela': 'AMW',
+  'pattipola': 'PTP',
+  'haputale': 'HPT',
+  'bandarawela': 'BDA',
+  'ella': 'ELL',
+  'badulla': 'BAD',
+  'mount lavinia': 'MLV',
+  'panadura': 'PND',
+  'kalutara south': 'KTS',
+  'aluthgama': 'ALT',
+  'ambalangoda': 'ABG',
+  'hikkaduwa': 'HKD',
+  'galle': 'GLE',
+  'weligama': 'WLM',
+  'matara': 'MTR',
+  'heliatta': 'BLT',
+  'avissawella': 'AVW',
+  'negambo': 'NGB',
+  'puttalam': 'PTM',
+  'trincomalee': 'TCO',
+  'tricomalee': 'TCO2',
+  'baticaloa': 'BTC',
+};
+
+function generateCode(name: string, usedCodes: Set<string>): string {
+  const normalized = name.toLowerCase().trim();
+  if (KNOWN_CODES[normalized] && !usedCodes.has(KNOWN_CODES[normalized])) {
+    usedCodes.add(KNOWN_CODES[normalized]);
+    return KNOWN_CODES[normalized];
+  }
+
+  // Generate 3-4 letter code from name
+  const words = name.replace(/[^a-zA-Z0-9\s]/g, '').trim().split(/\s+/);
+  let baseCode = '';
+
+  if (words.length >= 3) {
+    baseCode = (words[0][0] + words[1][0] + words[2][0]).toUpperCase();
+  } else if (words.length === 2) {
+    baseCode = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+  } else {
+    baseCode = words[0].substring(0, 4).toUpperCase();
+  }
+
+  if (baseCode.length < 3) {
+    baseCode = baseCode.padEnd(3, 'X');
+  }
+
+  let code = baseCode;
+  let counter = 1;
+  while (usedCodes.has(code)) {
+    code = `${baseCode.substring(0, 3)}${counter}`;
+    counter++;
+  }
+
+  usedCodes.add(code);
+  return code;
+}
+
 async function main() {
-  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'AdminPassword123!';
-  const adminName = process.env.INITIAL_ADMIN_NAME || 'Super Administrator';
+  console.log('🌱 Seeding Sri Lanka Railway Stations...');
 
-  const existingAdmin = await prisma.user.findFirst({
-    where: { role: 'admin' },
-  });
-
-  if (existingAdmin) {
-    console.log(`[Seed] An admin user already exists (${existingAdmin.email}). Skipping initial seed.`);
+  const filePath = path.join(__dirname, '../stations-with-cumulative-distances.md');
+  if (!fs.existsSync(filePath)) {
+    console.error('❌ Station markdown file not found at:', filePath);
     return;
   }
 
-  console.log(`[Seed] Creating initial admin user: ${adminEmail}`);
+  const content = fs.readFileSync(filePath, 'utf-8');
 
-  const createdAdmin = await auth.api.createUser({
-    body: {
-      email: adminEmail.toLowerCase(),
-      password: adminPassword,
-      name: adminName,
-      role: 'admin',
-      data: {
-        title: 'Mr',
-        firstName: 'Super',
-        lastName: 'Administrator',
-        position: 'Chief Systems Administrator',
+  // Parse markdown rows matching "| Station Name | Cumulative Distance (Km) |"
+  const regex = /\|\s*([^|\n]+?)\s*\|\s*([\d.]+)\s*/g;
+  let match;
+  const stations: Array<{ name: string; distance: number }> = [];
+
+  while ((match = regex.exec(content)) !== null) {
+    const rawName = match[1].trim();
+    const rawDist = parseFloat(match[2]);
+
+    if (rawName && !isNaN(rawDist) && rawName !== 'Station Name' && !rawName.includes('---')) {
+      const cleanName = rawName.replace(/\.+$/, '').trim();
+      stations.push({
+        name: cleanName,
+        distance: rawDist,
+      });
+    }
+  }
+
+  console.log(`📍 Parsed ${stations.length} stations from markdown.`);
+
+  const usedCodes = new Set<string>();
+  let insertedCount = 0;
+
+  for (const st of stations) {
+    const code = generateCode(st.name, usedCodes);
+
+    await (prisma.station as any).upsert({
+      where: { code },
+      update: {
+        name: st.name,
+        cumulativeDistance: st.distance,
       },
-    },
-  });
+      create: {
+        name: st.name,
+        code,
+        cumulativeDistance: st.distance,
+        location: 'Sri Lanka Railways Network',
+      },
+    });
+    insertedCount++;
+  }
 
-  console.log(`[Seed] Initial admin user created successfully! ID: ${createdAdmin.user.id}`);
+  console.log(`✅ Successfully seeded/updated ${insertedCount} stations in the database.`);
 }
 
 main()
   .catch((e) => {
-    console.error('[Seed Error]:', e);
+    console.error('❌ Error seeding stations:', e);
     process.exit(1);
   })
   .finally(async () => {
