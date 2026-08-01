@@ -1,4 +1,5 @@
 import axiosInstance from './axiosInstance';
+import axios from 'axios';
 
 // Station Models
 export interface Station {
@@ -55,7 +56,7 @@ export interface UpdateLinePayload {
   stations?: IntermediateStationPayload[];
 }
 
-// API Response Wrappers
+// API Response Wrapper
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -76,7 +77,6 @@ export const fetchStationsApi = async (params?: {
   return response.data;
 };
 
-// Fetch All Stations (for select dropdowns in line creation)
 export const fetchAllStationsApi = async (): Promise<Station[]> => {
   const response = await axiosInstance.get<PaginatedResponse<Station>>('/api/v1/admin/stations', {
     params: { page: 1, limit: 500 },
@@ -116,77 +116,178 @@ export const deleteLineApi = async (id: string): Promise<{ message: string; id: 
   return response.data;
 };
 
-// Train Configuration Models (UI Frontend state)
-export interface CoachConfig {
+// Coach Models & APIs (/api/v1/admin/coaches)
+export interface CoachItem {
   id: string;
   identifier: string;
-  position: number;
-  seatCount: number;
-  isReserved: boolean;
+  seat_count: number;
+  is_reserved: boolean;
+  position?: number;
+  attached_trains_count?: number;
+}
+
+export interface CreateCoachPayload {
+  identifier: string;
+  seat_count: number;
+  is_reserved?: boolean;
+}
+
+export interface UpdateCoachPayload {
+  identifier?: string;
+  seat_count?: number;
+  is_reserved?: boolean;
+}
+
+export const fetchCoachesApi = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  is_reserved?: boolean;
+}): Promise<PaginatedResponse<CoachItem>> => {
+  const response = await axiosInstance.get<PaginatedResponse<CoachItem>>('/api/v1/admin/coaches', {
+    params,
+  });
+  return response.data;
+};
+
+export const createCoachApi = async (payload: CreateCoachPayload): Promise<CoachItem> => {
+  const response = await axiosInstance.post<CoachItem>('/api/v1/admin/coaches', payload);
+  return response.data;
+};
+
+export const updateCoachApi = async (id: string, payload: UpdateCoachPayload): Promise<CoachItem> => {
+  const response = await axiosInstance.put<CoachItem>(`/api/v1/admin/coaches/${id}`, payload);
+  return response.data;
+};
+
+export const deleteCoachApi = async (id: string): Promise<{ message: string; id: string }> => {
+  const response = await axiosInstance.delete<{ message: string; id: string }>(`/api/v1/admin/coaches/${id}`);
+  return response.data;
+};
+
+/**
+ * Ensures a coach exists in DB with given identifier, seat count & reservation status.
+ * If coach exists (409 conflict), updates its properties and returns coach ID.
+ */
+export const ensureCoachApi = async (
+  identifier: string,
+  seatCount: number,
+  isReserved: boolean
+): Promise<string> => {
+  const cleanIdentifier = identifier.trim().toUpperCase();
+  try {
+    const created = await createCoachApi({
+      identifier: cleanIdentifier,
+      seat_count: seatCount,
+      is_reserved: isReserved,
+    });
+    return created.id;
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 409) {
+      // Find existing coach by searching exact identifier
+      const searchRes = await fetchCoachesApi({ search: cleanIdentifier, limit: 10 });
+      const matched = searchRes.data.find((c) => c.identifier.toUpperCase() === cleanIdentifier);
+      if (matched) {
+        await updateCoachApi(matched.id, {
+          seat_count: seatCount,
+          is_reserved: isReserved,
+        });
+        return matched.id;
+      }
+    }
+    throw err;
+  }
+};
+
+// Train Models & APIs (/api/v1/admin/trains)
+export interface LineRef {
+  id: string;
+  name: string;
 }
 
 export interface TrainConfig {
   id: string;
   name: string;
-  trainNumber: string;
-  lineId: string;
-  lineName?: string;
-  totalCoaches: number;
-  reservableCoaches: number;
-  totalSeats: number;
-  coaches: CoachConfig[];
-  createdAt: string;
+  train_number: string;
+  line?: LineRef | null;
+  coach_count: number;
+  total_seat_count: number;
+  coaches: CoachItem[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export const generateDefaultCoaches = (totalCoaches = 8, reservableCount = 3, seatsPerCoach = 54): CoachConfig[] => {
+export interface CreateTrainPayload {
+  name: string;
+  train_number: string;
+  line_id?: string;
+  coach_ids?: string[];
+}
+
+export interface UpdateTrainPayload {
+  name?: string;
+  train_number?: string;
+  line_id?: string;
+  coach_ids?: string[];
+}
+
+export const fetchTrainsApi = async (params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  line_id?: string;
+}): Promise<PaginatedResponse<TrainConfig>> => {
+  const response = await axiosInstance.get<PaginatedResponse<TrainConfig>>('/api/v1/admin/trains', {
+    params,
+  });
+  return response.data;
+};
+
+export const fetchTrainByIdApi = async (id: string): Promise<TrainConfig> => {
+  const response = await axiosInstance.get<TrainConfig>(`/api/v1/admin/trains/${id}`);
+  return response.data;
+};
+
+export const createTrainApi = async (payload: CreateTrainPayload): Promise<TrainConfig> => {
+  const response = await axiosInstance.post<TrainConfig>('/api/v1/admin/trains', payload);
+  return response.data;
+};
+
+export const updateTrainApi = async (id: string, payload: UpdateTrainPayload): Promise<TrainConfig> => {
+  const response = await axiosInstance.put<TrainConfig>(`/api/v1/admin/trains/${id}`, payload);
+  return response.data;
+};
+
+export const deleteTrainApi = async (id: string): Promise<{ message: string; id: string }> => {
+  const response = await axiosInstance.delete<{ message: string; id: string }>(`/api/v1/admin/trains/${id}`);
+  return response.data;
+};
+
+// Helper to generate default coaches array with "train number - alphabetical order"
+export interface FormCoachState {
+  id?: string;
+  identifier: string;
+  seatCount: number;
+  isReserved: boolean;
+  position: number;
+}
+
+export const generateDefaultCoaches = (
+  trainNumber = '1005',
+  totalCoaches = 8,
+  reservableCount = 3,
+  seatsPerCoach = 54
+): FormCoachState[] => {
+  const cleanNum = trainNumber.trim() || '1005';
   return Array.from({ length: totalCoaches }, (_, index) => {
+    const letter = String.fromCharCode(65 + index); // A, B, C...
     const position = index + 1;
     const isReserved = position <= reservableCount;
     return {
-      id: `coach-${position}`,
-      identifier: `Coach ${String.fromCharCode(65 + index)} (${isReserved ? 'Reserved' : 'Standard'})`,
+      identifier: `${cleanNum}-${letter}`,
       position,
       seatCount: seatsPerCoach,
       isReserved,
     };
   });
 };
-
-export const INITIAL_TRAINS: TrainConfig[] = [
-  {
-    id: 'trn-1',
-    name: 'Podi Menike Express',
-    trainNumber: '1005',
-    lineId: 'line-1',
-    lineName: 'Main Line (Colombo - Badulla)',
-    totalCoaches: 8,
-    reservableCoaches: 3,
-    totalSeats: 432,
-    coaches: generateDefaultCoaches(8, 3, 54),
-    createdAt: '2026-01-20',
-  },
-  {
-    id: 'trn-2',
-    name: 'Udarata Menike Express',
-    trainNumber: '1015',
-    lineId: 'line-1',
-    lineName: 'Main Line (Colombo - Badulla)',
-    totalCoaches: 8,
-    reservableCoaches: 3,
-    totalSeats: 432,
-    coaches: generateDefaultCoaches(8, 3, 54),
-    createdAt: '2026-01-22',
-  },
-  {
-    id: 'trn-3',
-    name: 'Yal Devi Intercity',
-    trainNumber: '4017',
-    lineId: 'line-3',
-    lineName: 'Northern Line (Colombo - Kankesanthurai)',
-    totalCoaches: 8,
-    reservableCoaches: 3,
-    totalSeats: 432,
-    coaches: generateDefaultCoaches(8, 3, 54),
-    createdAt: '2026-01-25',
-  },
-];

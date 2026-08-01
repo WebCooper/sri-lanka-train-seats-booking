@@ -21,13 +21,20 @@ import {
   updateLineApi, 
   deleteLineApi,
   fetchStationsApi,
-  INITIAL_TRAINS
+  fetchTrainsApi,
+  createTrainApi,
+  updateTrainApi,
+  deleteTrainApi,
+  ensureCoachApi,
 } from '../api/trainManagementApi';
 import type { 
   RailwayLine, 
   CreateLinePayload, 
   UpdateLinePayload,
-  TrainConfig
+  TrainConfig,
+  FormCoachState,
+  CreateTrainPayload,
+  UpdateTrainPayload
 } from '../api/trainManagementApi';
 import { LineModal } from '../components/LineModal';
 import { TrainConfigModal } from '../components/TrainConfigModal';
@@ -52,11 +59,18 @@ export const TrainManagement: React.FC = () => {
   const [deletingLine, setDeletingLine] = useState<RailwayLine | null>(null);
   const [isDeletingLine, setIsDeletingLine] = useState(false);
 
-  // Train Configurations State (UI State)
-  const [trains, setTrains] = useState<TrainConfig[]>(INITIAL_TRAINS);
+  // Trains API State
+  const [trains, setTrains] = useState<TrainConfig[]>([]);
+  const [totalTrains, setTotalTrains] = useState(0);
+  const [trainPage, setTrainPage] = useState(1);
+  const [totalTrainPages, setTotalTrainPages] = useState(1);
+  const [isLoadingTrains, setIsLoadingTrains] = useState(true);
+
+  // Train Modal State
   const [isTrainModalOpen, setIsTrainModalOpen] = useState(false);
   const [editingTrain, setEditingTrain] = useState<TrainConfig | null>(null);
   const [deletingTrain, setDeletingTrain] = useState<TrainConfig | null>(null);
+  const [isDeletingTrain, setIsDeletingTrain] = useState(false);
 
   // Fetch Lines from Backend API (GET /api/v1/admin/lines)
   const loadLines = useCallback(async (page = 1) => {
@@ -74,20 +88,37 @@ export const TrainManagement: React.FC = () => {
     }
   }, []);
 
+  // Fetch Trains from Backend API (GET /api/v1/admin/trains)
+  const loadTrains = useCallback(async (page = 1) => {
+    setIsLoadingTrains(true);
+    try {
+      const res = await fetchTrainsApi({ page, limit: 10 });
+      setTrains(res.data);
+      setTotalTrains(res.total);
+      setTrainPage(res.page);
+      setTotalTrainPages(res.totalPages || 1);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to fetch train fleet from server.'));
+    } finally {
+      setIsLoadingTrains(false);
+    }
+  }, []);
+
   // Fetch Total Stations Count from Backend API (GET /api/v1/admin/stations)
   const loadStationsCount = useCallback(async () => {
     try {
       const res = await fetchStationsApi({ page: 1, limit: 1 });
       setTotalStationCount(res.total);
     } catch {
-      // Ignore fallback
+      // Fallback
     }
   }, []);
 
   useEffect(() => {
     loadLines(linePage);
+    loadTrains(trainPage);
     loadStationsCount();
-  }, [loadLines, loadStationsCount, linePage]);
+  }, [loadLines, loadTrains, loadStationsCount, linePage, trainPage]);
 
   // Line Handlers
   const handleOpenCreateLine = () => {
@@ -146,26 +177,70 @@ export const TrainManagement: React.FC = () => {
     setIsTrainModalOpen(true);
   };
 
-  const handleSaveTrain = (trainData: TrainConfig) => {
-    const existingIndex = trains.findIndex((t) => t.id === trainData.id);
-    if (existingIndex >= 0) {
-      const updated = [...trains];
-      updated[existingIndex] = trainData;
-      setTrains(updated);
-    } else {
-      setTrains([trainData, ...trains]);
+  const handleCreateTrainSubmit = async (payload: CreateTrainPayload, formCoaches: FormCoachState[]) => {
+    try {
+      // 1. Ensure coaches exist in DB with format "train_number - letter"
+      const coachIds: string[] = [];
+      for (const fc of formCoaches) {
+        const coachId = await ensureCoachApi(fc.identifier, fc.seatCount, fc.isReserved);
+        coachIds.push(coachId);
+      }
+
+      // 2. Create Train with coach IDs
+      await createTrainApi({
+        ...payload,
+        coach_ids: coachIds,
+      });
+
+      loadTrains(trainPage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to create train configuration.'));
+      throw err;
     }
   };
 
-  const handleConfirmDeleteTrain = () => {
-    if (!deletingTrain) return;
-    setTrains(trains.filter((t) => t.id !== deletingTrain.id));
-    toast.success(`Train configuration "${deletingTrain.name}" deleted.`);
-    setDeletingTrain(null);
+  const handleUpdateTrainSubmit = async (id: string, payload: UpdateTrainPayload, formCoaches: FormCoachState[]) => {
+    try {
+      // 1. Ensure coaches exist in DB
+      const coachIds: string[] = [];
+      for (const fc of formCoaches) {
+        const coachId = await ensureCoachApi(fc.identifier, fc.seatCount, fc.isReserved);
+        coachIds.push(coachId);
+      }
+
+      // 2. Update Train with coach IDs
+      await updateTrainApi(id, {
+        ...payload,
+        coach_ids: coachIds,
+      });
+
+      loadTrains(trainPage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to update train configuration.'));
+      throw err;
+    }
   };
 
-  const totalSeatsAllTrains = trains.reduce((acc, t) => acc + (t.totalSeats || 0), 0);
-  const totalReservableCoaches = trains.reduce((acc, t) => acc + (t.reservableCoaches || 0), 0);
+  const handleConfirmDeleteTrain = async () => {
+    if (!deletingTrain) return;
+    setIsDeletingTrain(true);
+    try {
+      await deleteTrainApi(deletingTrain.id);
+      toast.success(`Train "${deletingTrain.name}" deleted successfully.`);
+      setDeletingTrain(null);
+      loadTrains(trainPage);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete train.'));
+    } finally {
+      setIsDeletingTrain(false);
+    }
+  };
+
+  const totalSeatsAllTrains = trains.reduce((acc, t) => acc + (t.total_seat_count || 0), 0);
+  const totalReservableCoaches = trains.reduce(
+    (acc, t) => acc + (t.coaches ? t.coaches.filter((c) => c.is_reserved).length : 0),
+    0
+  );
 
   return (
     <div>
@@ -203,6 +278,16 @@ export const TrainManagement: React.FC = () => {
         </div>
 
         <div className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+            <Train className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-slate-900">{totalTrains}</div>
+            <div className="text-xs text-slate-500 font-medium">Configured Trains</div>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-sm flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
             <MapPin className="w-6 h-6" />
           </div>
@@ -235,7 +320,7 @@ export const TrainManagement: React.FC = () => {
 
       {/* Two Main Cards Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* CARD 1: Railway Lines Management (Connected to NestJS API) */}
+        {/* CARD 1: Railway Lines Management */}
         <div className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm flex flex-col justify-between">
           <div>
             {/* Card Header */}
@@ -369,54 +454,97 @@ export const TrainManagement: React.FC = () => {
               </button>
             </div>
 
-            {/* Configured Trains List */}
-            <div className="flex flex-col gap-3">
-              {trains.map((train) => (
-                <div
-                  key={train.id}
-                  className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl hover:bg-slate-100/70 transition-colors flex items-center justify-between gap-4"
-                >
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-slate-900 truncate">
-                        {train.name} (#{train.trainNumber})
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
-                        {train.reservableCoaches} / {train.totalCoaches} Reservable
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1 text-indigo-600 font-medium">
-                        <Layers className="w-3.5 h-3.5" />
-                        {train.lineName || 'Assigned Route'}
-                      </span>
-                      <span>•</span>
-                      <span>
-                        <strong>{train.totalSeats}</strong> Seats Total
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleOpenEditTrain(train)}
-                      className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
-                      title="Open Configuration Window"
+            {/* Configured Trains List Content */}
+            {isLoadingTrains ? (
+              <div className="py-12 text-center text-slate-500">
+                <Loader2 className="w-7 h-7 animate-spin text-sky-600 mx-auto mb-2" />
+                <p className="text-xs font-medium">Loading trains from backend...</p>
+              </div>
+            ) : trains.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
+                <Train className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <h3 className="text-sm font-semibold text-slate-800 mb-0.5">No Trains Configured</h3>
+                <p className="text-xs">Click "Configure Train" above to setup your first train fleet.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {trains.map((train) => {
+                  const reservable = train.coaches
+                    ? train.coaches.filter((c) => c.is_reserved).length
+                    : 0;
+                  return (
+                    <div
+                      key={train.id}
+                      className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-2xl hover:bg-slate-100/70 transition-colors flex items-center justify-between gap-4"
                     >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingTrain(train)}
-                      className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                      title="Delete Train Configuration"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 truncate">
+                            {train.name} (#{train.train_number})
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                            {reservable} / {train.coach_count || 0} Reservable
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-xs text-slate-500">
+                          <span className="flex items-center gap-1 text-indigo-600 font-medium">
+                            <Layers className="w-3.5 h-3.5" />
+                            {train.line?.name || 'Unassigned Line'}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            <strong>{train.total_seat_count || 0}</strong> Seats Total
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenEditTrain(train)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors cursor-pointer"
+                          title="Open Configuration Window"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setDeletingTrain(train)}
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete Train Configuration"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Train Pagination Controls */}
+            {!isLoadingTrains && totalTrainPages > 1 && (
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100">
+                <span className="text-[11px] text-slate-500">
+                  Page {trainPage} of {totalTrainPages}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setTrainPage((p) => Math.max(1, p - 1))}
+                    disabled={trainPage <= 1}
+                    className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setTrainPage((p) => Math.min(totalTrainPages, p + 1))}
+                    disabled={trainPage >= totalTrainPages}
+                    className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 rounded-lg text-xs"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -434,7 +562,8 @@ export const TrainManagement: React.FC = () => {
       <TrainConfigModal
         isOpen={isTrainModalOpen}
         onClose={() => setIsTrainModalOpen(false)}
-        onSave={handleSaveTrain}
+        onSaveCreate={handleCreateTrainSubmit}
+        onSaveUpdate={handleUpdateTrainSubmit}
         lines={lines}
         initialData={editingTrain}
       />
@@ -464,12 +593,13 @@ export const TrainManagement: React.FC = () => {
         title="Delete Train Configuration"
         message={
           deletingTrain
-            ? `Are you sure you want to delete train configuration "${deletingTrain.name}" (#${deletingTrain.trainNumber})?`
+            ? `Are you sure you want to delete train configuration "${deletingTrain.name}" (#${deletingTrain.train_number})?`
             : ''
         }
         confirmText="Delete Train"
         cancelText="Cancel"
         variant="danger"
+        isLoading={isDeletingTrain}
       />
     </div>
   );

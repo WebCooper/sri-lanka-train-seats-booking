@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, Train, Plus, Trash2, ShieldCheck, RefreshCw, CheckCircle2 } from 'lucide-react';
-import type { TrainConfig, CoachConfig, RailwayLine } from '../api/trainManagementApi';
+import { X, Train, Plus, Trash2, ShieldCheck, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
+import type { 
+  TrainConfig, 
+  RailwayLine, 
+  FormCoachState,
+  CreateTrainPayload,
+  UpdateTrainPayload 
+} from '../api/trainManagementApi';
 import { generateDefaultCoaches } from '../api/trainManagementApi';
 import toast from 'react-hot-toast';
 
 interface TrainConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (trainData: TrainConfig) => void;
+  onSaveCreate: (payload: CreateTrainPayload, formCoaches: FormCoachState[]) => Promise<void>;
+  onSaveUpdate: (id: string, payload: UpdateTrainPayload, formCoaches: FormCoachState[]) => Promise<void>;
   lines: RailwayLine[];
   initialData?: TrainConfig | null;
 }
@@ -15,7 +22,8 @@ interface TrainConfigModalProps {
 export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
   isOpen,
   onClose,
-  onSave,
+  onSaveCreate,
+  onSaveUpdate,
   lines,
   initialData,
 }) => {
@@ -24,37 +32,64 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
   const [trainName, setTrainName] = useState('');
   const [trainNumber, setTrainNumber] = useState('');
   const [lineId, setLineId] = useState('');
-  const [coaches, setCoaches] = useState<CoachConfig[]>([]);
+  const [coaches, setCoaches] = useState<FormCoachState[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialData) {
       setTrainName(initialData.name || '');
-      setTrainNumber(initialData.trainNumber || '');
-      setLineId(initialData.lineId || (lines[0]?.id || ''));
-      setCoaches(initialData.coaches || generateDefaultCoaches(8, 3, 54));
+      setTrainNumber(initialData.train_number || '');
+      setLineId(initialData.line?.id || (lines[0]?.id || ''));
+
+      if (initialData.coaches && initialData.coaches.length > 0) {
+        const loadedCoaches: FormCoachState[] = initialData.coaches.map((c, idx) => ({
+          id: c.id,
+          identifier: c.identifier || `${initialData.train_number}-${String.fromCharCode(65 + idx)}`,
+          position: idx + 1,
+          seatCount: c.seat_count ?? 54,
+          isReserved: c.is_reserved ?? false,
+        }));
+        setCoaches(loadedCoaches);
+      } else {
+        setCoaches(generateDefaultCoaches(initialData.train_number || '1005', 8, 3, 54));
+      }
     } else {
+      const defaultNumber = '1005';
       setTrainName('');
-      setTrainNumber('');
+      setTrainNumber(defaultNumber);
       setLineId(lines[0]?.id || '');
-      // DEFAULT SPECIFIED BY USER: 8 Coaches, 3 Reservable
-      setCoaches(generateDefaultCoaches(8, 3, 54));
+      setCoaches(generateDefaultCoaches(defaultNumber, 8, 3, 54));
     }
   }, [initialData, isOpen, lines]);
+
+  // Update coach identifiers dynamically whenever trainNumber changes
+  const handleTrainNumberChange = (newNum: string) => {
+    setTrainNumber(newNum);
+    const cleanNum = newNum.trim() || 'TRAIN';
+    setCoaches((prev) =>
+      prev.map((c, idx) => ({
+        ...c,
+        identifier: `${cleanNum}-${String.fromCharCode(65 + idx)}`,
+      }))
+    );
+  };
 
   if (!isOpen) return null;
 
   const handleResetToDefaultPreset = () => {
-    // Reset to user specification: 8 coaches, 3 reservable, 54 seats
-    setCoaches(generateDefaultCoaches(8, 3, 54));
-    toast.success('Reset coach layout to default preset (8 Coaches, 3 Reservable).');
+    const cleanNum = trainNumber.trim() || '1005';
+    setCoaches(generateDefaultCoaches(cleanNum, 8, 3, 54));
+    toast.success('Reset layout to default preset (8 Coaches: 3 Reservable, 54 Seats).');
   };
 
   const handleAddCoach = () => {
+    const cleanNum = trainNumber.trim() || '1005';
     const newPos = coaches.length + 1;
+    const letter = String.fromCharCode(65 + coaches.length);
     const isReserved = newPos <= 3;
-    const newCoach: CoachConfig = {
-      id: `coach-${Date.now()}-${newPos}`,
-      identifier: `Coach ${String.fromCharCode(65 + coaches.length)} (${isReserved ? 'Reserved' : 'Standard'})`,
+
+    const newCoach: FormCoachState = {
+      identifier: `${cleanNum}-${letter}`,
       position: newPos,
       seatCount: 54,
       isReserved,
@@ -67,31 +102,30 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
       toast.error('Train must have at least 1 coach.');
       return;
     }
-    const updated = coaches.filter((_, i) => i !== index).map((c, idx) => ({
-      ...c,
-      position: idx + 1,
-      identifier: `Coach ${String.fromCharCode(65 + idx)} (${c.isReserved ? 'Reserved' : 'Standard'})`,
-    }));
+    const cleanNum = trainNumber.trim() || '1005';
+    const updated = coaches
+      .filter((_, i) => i !== index)
+      .map((c, idx) => ({
+        ...c,
+        position: idx + 1,
+        identifier: `${cleanNum}-${String.fromCharCode(65 + idx)}`,
+      }));
     setCoaches(updated);
   };
 
-  const handleCoachChange = (index: number, key: keyof CoachConfig, value: any) => {
+  const handleCoachChange = (index: number, key: keyof FormCoachState, value: any) => {
     const updated = [...coaches];
     updated[index] = {
       ...updated[index],
       [key]: value,
     };
-    // Update identifier label if reservation status changed
-    if (key === 'isReserved') {
-      updated[index].identifier = `Coach ${String.fromCharCode(65 + index)} (${value ? 'Reserved' : 'Standard'})`;
-    }
     setCoaches(updated);
   };
 
   const reservableCount = coaches.filter((c) => c.isReserved).length;
   const totalSeats = coaches.reduce((acc, c) => acc + (Number(c.seatCount) || 0), 0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!trainName.trim()) {
@@ -104,29 +138,32 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
       return;
     }
 
-    if (!lineId) {
-      toast.error('Please assign a railway line to this train.');
-      return;
+    setIsSubmitting(true);
+
+    try {
+      if (isEditMode && initialData) {
+        const updatePayload: UpdateTrainPayload = {
+          name: trainName.trim(),
+          train_number: trainNumber.trim(),
+          line_id: lineId || undefined,
+        };
+        await onSaveUpdate(initialData.id, updatePayload, coaches);
+        toast.success('Train configuration updated successfully.');
+      } else {
+        const createPayload: CreateTrainPayload = {
+          name: trainName.trim(),
+          train_number: trainNumber.trim(),
+          line_id: lineId || undefined,
+        };
+        await onSaveCreate(createPayload, coaches);
+        toast.success('New train configuration created successfully.');
+      }
+      onClose();
+    } catch {
+      // Handled upstream
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const assignedLine = lines.find((l) => l.id === lineId);
-
-    const newTrainObj: TrainConfig = {
-      id: initialData?.id || `trn-${Date.now()}`,
-      name: trainName.trim(),
-      trainNumber: trainNumber.trim(),
-      lineId,
-      lineName: assignedLine?.name || 'Assigned Line',
-      totalCoaches: coaches.length,
-      reservableCoaches: reservableCount,
-      totalSeats,
-      coaches,
-      createdAt: initialData?.createdAt || new Date().toISOString().split('T')[0],
-    };
-
-    onSave(newTrainObj);
-    toast.success(isEditMode ? 'Train configuration updated.' : 'New train configuration created.');
-    onClose();
   };
 
   return (
@@ -135,7 +172,7 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
         {/* Modal Header */}
         <div className="flex items-start justify-between p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center">
               <Train className="w-5 h-5" />
             </div>
             <div>
@@ -150,6 +187,7 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
           <button
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            disabled={isSubmitting}
           >
             <X className="w-5 h-5" />
           </button>
@@ -180,20 +218,20 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
                 placeholder="e.g. 1005"
                 value={trainNumber}
-                onChange={(e) => setTrainNumber(e.target.value)}
+                onChange={(e) => handleTrainNumberChange(e.target.value)}
                 required
               />
             </div>
 
             {/* Assigned Line */}
             <div className="flex flex-col gap-1.5 sm:col-span-1">
-              <label className="text-xs font-semibold text-slate-700">Assigned Line Route *</label>
+              <label className="text-xs font-semibold text-slate-700">Assigned Line Route</label>
               <select
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
                 value={lineId}
                 onChange={(e) => setLineId(e.target.value)}
-                required
               >
+                <option value="">-- Select Railway Line --</option>
                 {lines.map((line) => (
                   <option key={line.id} value={line.id}>
                     {line.name}
@@ -211,7 +249,7 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                   Coach & Seat Composition
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Configure coaches and specify which coaches are available for passenger seat reservations.
+                  Coaches are named automatically using <strong className="text-slate-700">"Train Number - Alphabetical Order"</strong> (e.g. {trainNumber || '1005'}-A, {trainNumber || '1005'}-B).
                 </p>
               </div>
 
@@ -220,7 +258,7 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                   type="button"
                   onClick={handleResetToDefaultPreset}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-                  title="Set default 8 coaches with 3 reservable"
+                  title="Reset to default 8 coaches with 3 reservable"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
                   <span>Default Preset (8 Coaches, 3 Reservable)</span>
@@ -260,7 +298,7 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto p-1 no-scrollbar">
               {coaches.map((coach, index) => (
                 <div
-                  key={coach.id || index}
+                  key={index}
                   className={`p-3.5 rounded-xl border transition-all ${
                     coach.isReserved
                       ? 'bg-emerald-50/50 border-emerald-200'
@@ -269,10 +307,10 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px]">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
                         {coach.position}
                       </span>
-                      {coach.identifier}
+                      Code: <span className="text-indigo-600 font-mono">{coach.identifier}</span>
                     </span>
 
                     <button
@@ -327,15 +365,26 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
               type="button"
               onClick={onClose}
               className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-all"
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-all disabled:opacity-65"
+              disabled={isSubmitting}
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{isEditMode ? 'Save Train Configuration' : 'Create Train Configuration'}</span>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving Configuration...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isEditMode ? 'Save Train Configuration' : 'Create Train Configuration'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>
