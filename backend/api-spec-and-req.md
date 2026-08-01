@@ -104,3 +104,12 @@ Referencing the file Assignment - LSF SE Interview 2026.pdf, the following opera
 | GET | `/reports/revenue` | Generate financial performance reports | `date_from`, `date_to`, `line_id` |
 
 ---
+
+
+Method,Endpoint,Description,Key Payload / Query
+GET,/stations,Fetch all stations to populate origin/destination dropdowns.,None
+GET,/schedules,Search for available train schedules.,"date, origin_id, destination_id"
+GET,/schedules/{id}/seats,View available seats for a specific leg of the journey.,"origin_id, destination_id"
+POST,/bookings/hold,Temporarily lock a seat for a specific segment to prevent race conditions during checkout.,"schedule_id, seat_id, origin_id, destination_id"
+POST,/bookings,Confirm booking and calculate the final fare.,"hold_id, passenger_details"
+GET,/bookings/{id},Retrieve confirmed ticket details.,None

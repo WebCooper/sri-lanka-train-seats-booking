@@ -10,20 +10,22 @@ datasource db {
 }
 
 model User {
-  id             String    @id
+  id             String     @id
   name           String
   email          String
-  emailVerified  Boolean   @default(false)
+  emailVerified  Boolean    @default(false)
   image          String?
-  role           String?   @default("passenger")
-  banned         Boolean?  @default(false)
+  role           String?    @default("passenger")
+  banned         Boolean?   @default(false)
   banReason      String?
   banExpires     DateTime?
   impersonatedBy String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   sessions       Session[]
   accounts       Account[]
+  seatHolds      SeatHold[]
+  bookings       Booking[]
 
   @@unique([email])
   @@map("user")
@@ -85,9 +87,13 @@ model Station {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  startLines        Line[]        @relation("StartStation")
-  endLines          Line[]        @relation("EndStation")
+  startLines         Line[]        @relation("StartStation")
+  endLines           Line[]        @relation("EndStation")
   lineIntermediaries LineStation[]
+  holdOrigins        SeatHold[]    @relation("HoldOrigin")
+  holdDestinations   SeatHold[]    @relation("HoldDestination")
+  bookingOrigins     Booking[]     @relation("BookingOrigin")
+  bookingDestinations Booking[]    @relation("BookingDestination")
 
   @@map("station")
 }
@@ -131,6 +137,8 @@ model Coach {
   updatedAt  DateTime     @updatedAt
 
   trainCoaches TrainCoach[]
+  seatHolds    SeatHold[]
+  bookings     Booking[]
 
   @@map("coach")
 }
@@ -173,5 +181,55 @@ model Schedule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  seatHolds SeatHold[]
+  bookings  Booking[]
+
   @@map("schedule")
+}
+
+model SeatHold {
+  id                   String   @id @default(uuid())
+  scheduleId           String   @map("schedule_id")
+  schedule             Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  coachId              String   @map("coach_id")
+  coach                Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  seatNumber           Int      @map("seat_number")
+  originStationId      String   @map("origin_station_id")
+  originStation        Station  @relation("HoldOrigin", fields: [originStationId], references: [id])
+  destinationStationId String   @map("destination_station_id")
+  destinationStation   Station  @relation("HoldDestination", fields: [destinationStationId], references: [id])
+  userId               String?  @map("user_id")
+  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status               String   @default("ACTIVE")
+  expiresAt            DateTime @map("expires_at")
+  createdAt            DateTime @default(now())
+
+  @@index([scheduleId, coachId, seatNumber])
+  @@map("seat_hold")
+}
+
+model Booking {
+  id                   String   @id @default(uuid())
+  bookingReference     String   @unique @map("booking_reference")
+  scheduleId           String   @map("schedule_id")
+  schedule             Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  coachId              String   @map("coach_id")
+  coach                Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  seatNumber           Int      @map("seat_number")
+  originStationId      String   @map("origin_station_id")
+  originStation        Station  @relation("BookingOrigin", fields: [originStationId], references: [id])
+  destinationStationId String   @map("destination_station_id")
+  destinationStation   Station  @relation("BookingDestination", fields: [destinationStationId], references: [id])
+  passengerName        String   @map("passenger_name")
+  passengerEmail       String   @map("passenger_email")
+  passengerPhone       String?  @map("passenger_phone")
+  userId               String?  @map("user_id")
+  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fareAmount           Float    @default(0) @map("fare_amount")
+  status               String   @default("CONFIRMED")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([scheduleId, coachId, seatNumber])
+  @@map("booking")
 }
