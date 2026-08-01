@@ -3,6 +3,27 @@
 
 All endpoints are relative to the base URL `/api/v1/admin` and require an authorized admin role
 
+src/
+├── admin/                         ← Admin-only domain (Pattern A)
+│   ├── admin.controller.ts        → /api/v1/admin/admins
+│   ├── train/
+│   │   └── admin-train.controller.ts  → /api/v1/admin/trains
+│   ├── coach/
+│   │   └── admin-coach.controller.ts  → /api/v1/admin/coaches
+│   ├── line/
+│   │   └── admin-line.controller.ts   → /api/v1/admin/lines
+│   ├── station/
+│   │   └── admin-station.controller.ts → /api/v1/admin/stations
+│   ├── schedule/
+│   │   └── admin-schedule.controller.ts → /api/v1/admin/schedules
+│   └── reports/
+│       └── reports.controller.ts  → /api/v1/admin/reports
+│
+└── passenger/                     ← Passenger-facing domain
+    ├── trains.controller.ts       → /api/v1/trains  (public read)
+    ├── schedules.controller.ts    → /api/v1/schedules (public read)
+    └── bookings.controller.ts     → /api/v1/bookings (@PassengerOnly)
+
 ### 1. Admin Management
 
 | Method | Endpoint | Description | Key Payload / Query |
@@ -43,17 +64,27 @@ All endpoints are relative to the base URL `/api/v1/admin` and require an author
 | PUT | `/lines/{id}` | Update route and intermediaries | `stations` (ordered array of IDs and distances) |
 | DELETE | `/lines/{id}` | Delete a line | None |
 
-### 5. Schedule Management (Date & Session)
+### 5. Train Management
 
 | Method | Endpoint | Description | Key Payload / Query |
 | --- | --- | --- | --- |
-| GET | `/schedules` | List upcoming train sessions | `date_from`, `date_to`, `line_id` |
-| POST | `/schedules` | Schedule a train session | `line_id`, `departure_time`, `coach_ids` (array) |
+| GET | `/trains` | List all trains | `page`, `limit`, `line_id` |
+| POST | `/trains` | Add a new train | `name`, `train_number`, `line_id`, `coach_ids` (ordered array of coaches) |
+| GET | `/trains/{id}` | Retrieve train details with line & coaches | None |
+| PUT | `/trains/{id}` | Update train details or coach assignment | `name`, `train_number`, `line_id`, `coach_ids` |
+| DELETE | `/trains/{id}` | Remove a train from the system | None |
+
+### 6. Schedule Management (Date & Session)
+
+| Method | Endpoint | Description | Key Payload / Query |
+| --- | --- | --- | --- |
+| GET | `/schedules` | List upcoming train sessions | `date_from`, `date_to`, `line_id`, `train_id` |
+| POST | `/schedules` | Schedule a train session | `line_id`, `train_id`, `departure_time`, `arrival_time` |
 | GET | `/schedules/{id}` | Retrieve session details | None |
-| PUT | `/schedules/{id}` | Modify session time or coaches | `departure_time`, `coach_ids` |
+| PUT | `/schedules/{id}` | Modify session time or assigned train | `departure_time`, `arrival_time`, `train_id` |
 | DELETE | `/schedules/{id}` | Cancel a scheduled session | None |
 
-### 6. Additional Operations: Analytics & Reporting
+### 7. Additional Operations: Analytics & Reporting
 
 Referencing the file Assignment - LSF SE Interview 2026.pdf, the following operations support the recommended administrative views:
 

@@ -1,8 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
-export class QueryAdminDto {
+export class QueryTrainDto {
   @ApiPropertyOptional({ example: 1, default: 1, description: 'Page number for pagination' })
   @IsOptional()
   @Type(() => Number)
@@ -17,7 +17,12 @@ export class QueryAdminDto {
   @Min(1)
   limit?: number = 10;
 
-  @ApiPropertyOptional({ example: 'jane', description: 'Search filter by name or email' })
+  @ApiPropertyOptional({ example: 'a1b2c3d4-e5f6-7890-abcd-1234567890ab', description: 'Filter trains assigned to a specific line ID' })
+  @IsOptional()
+  @IsUUID('all', { message: 'line_id must be a valid UUID' })
+  line_id?: string;
+
+  @ApiPropertyOptional({ example: 'Udarata', description: 'Search filter by name or train number' })
   @IsOptional()
   @IsString()
   search?: string;
