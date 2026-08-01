@@ -8,123 +8,157 @@ export const DashboardOverview: React.FC = () => {
 
   return (
     <div>
-      {/* Dashboard Welcome Header */}
-      <div className="dashboard-heading">
-        <h1>Welcome, {user?.name || user?.email?.split('@')[0] || 'Admin'}</h1>
-        <p>Select an administration module below to manage system configurations & operations.</p>
+      {/* Dashboard Heading */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
+          Welcome, {user?.name || user?.email?.split('@')[0] || 'Admin'}
+        </h1>
+        <p className="text-sm text-slate-500">
+          Select an administration module below to manage system configurations & operations.
+        </p>
       </div>
 
       {/* Option Cards Grid - Portrait 3 per row */}
-      <div className="option-cards-grid">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
         {/* Admin Management Card (Active Link) */}
-        <Link to="/dashboard/admin-management" className="option-card-link">
-          <div className="option-card interactive">
+        <Link to="/dashboard/admin-management" className="no-underline flex h-full group">
+          <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-white border border-slate-200/90 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:border-indigo-300 transition-all duration-200 hover:-translate-y-1">
             <div>
-              <div className="card-top">
-                <div className="card-icon-box">
-                  <ShieldCheck style={{ width: 28, height: 28 }} />
+              <div className="flex items-start justify-between mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/10">
+                  <ShieldCheck className="w-7 h-7" />
                 </div>
-                <span className="status-badge status-active">Active</span>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Active
+                </span>
               </div>
-              <h2 className="card-title">Admin Management</h2>
-              <p className="card-desc">
+              <h2 className="text-xl font-bold text-slate-900 mb-2.5 group-hover:text-indigo-600 transition-colors">
+                Admin Management
+              </h2>
+              <p className="text-sm text-slate-500 leading-relaxed">
                 Configure system administrator credentials, manage user roles, and audit access permissions across the system.
               </p>
             </div>
-            <div className="card-footer-action">
+
+            <div className="flex items-center justify-between pt-5 border-t border-slate-100 text-sm font-semibold text-indigo-600 group-hover:text-indigo-700">
               <span>Open Module</span>
-              <ArrowRight style={{ width: 18, height: 18 }} />
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </div>
           </div>
         </Link>
 
-        {/* Additional Option Cards (Offline / Future Modules) */}
-        <div className="option-card disabled">
+        {/* Additional Option Cards (Offline Modules) */}
+        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
-            <div className="card-top">
-              <div className="card-icon-box" style={{ background: '#f1f5f9', color: '#64748b', boxShadow: 'none' }}>
-                <Train style={{ width: 28, height: 28 }} />
+            <div className="flex items-start justify-between mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
+                <Train className="w-7 h-7" />
               </div>
-              <span className="status-badge status-offline">Offline</span>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
+                Offline
+              </span>
             </div>
-            <h2 className="card-title">Train Schedules</h2>
-            <p className="card-desc">
+            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
+              Train Schedules
+            </h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               Manage train routes, departure & arrival timetables, line stops, and coach allocations.
             </p>
           </div>
-          <div className="card-footer-action" style={{ color: '#94a3b8' }}>
+
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>
 
-        <div className="option-card disabled">
+        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
-            <div className="card-top">
-              <div className="card-icon-box" style={{ background: '#f1f5f9', color: '#64748b', boxShadow: 'none' }}>
-                <Ticket style={{ width: 28, height: 28 }} />
+            <div className="flex items-start justify-between mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
+                <Ticket className="w-7 h-7" />
               </div>
-              <span className="status-badge status-offline">Offline</span>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
+                Offline
+              </span>
             </div>
-            <h2 className="card-title">Seat Bookings</h2>
-            <p className="card-desc">
+            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
+              Seat Bookings
+            </h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               View passenger seat reservations, temporary seat holds, fare calculations, and booking logs.
             </p>
           </div>
-          <div className="card-footer-action" style={{ color: '#94a3b8' }}>
+
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>
 
-        <div className="option-card disabled">
+        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
-            <div className="card-top">
-              <div className="card-icon-box" style={{ background: '#f1f5f9', color: '#64748b', boxShadow: 'none' }}>
-                <Users style={{ width: 28, height: 28 }} />
+            <div className="flex items-start justify-between mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
+                <Users className="w-7 h-7" />
               </div>
-              <span className="status-badge status-offline">Offline</span>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
+                Offline
+              </span>
             </div>
-            <h2 className="card-title">Passenger Directory</h2>
-            <p className="card-desc">
+            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
+              Passenger Directory
+            </h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               Manage registered passenger accounts, NIC verification status, and booking history.
             </p>
           </div>
-          <div className="card-footer-action" style={{ color: '#94a3b8' }}>
+
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>
 
-        <div className="option-card disabled">
+        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
-            <div className="card-top">
-              <div className="card-icon-box" style={{ background: '#f1f5f9', color: '#64748b', boxShadow: 'none' }}>
-                <BarChart3 style={{ width: 28, height: 28 }} />
+            <div className="flex items-start justify-between mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
+                <BarChart3 className="w-7 h-7" />
               </div>
-              <span className="status-badge status-offline">Offline</span>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
+                Offline
+              </span>
             </div>
-            <h2 className="card-title">Analytics & Reports</h2>
-            <p className="card-desc">
+            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
+              Analytics & Reports
+            </h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               Generate daily occupancy charts, ticket revenue analytics, and system audit logs.
             </p>
           </div>
-          <div className="card-footer-action" style={{ color: '#94a3b8' }}>
+
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>
 
-        <div className="option-card disabled">
+        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
-            <div className="card-top">
-              <div className="card-icon-box" style={{ background: '#f1f5f9', color: '#64748b', boxShadow: 'none' }}>
-                <Settings style={{ width: 28, height: 28 }} />
+            <div className="flex items-start justify-between mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
+                <Settings className="w-7 h-7" />
               </div>
-              <span className="status-badge status-offline">Offline</span>
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
+                Offline
+              </span>
             </div>
-            <h2 className="card-title">System Settings</h2>
-            <p className="card-desc">
+            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
+              System Settings
+            </h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               Configure system parameters, fare rate multipliers, CORS origins, and API credentials.
             </p>
           </div>
-          <div className="card-footer-action" style={{ color: '#94a3b8' }}>
+
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>
