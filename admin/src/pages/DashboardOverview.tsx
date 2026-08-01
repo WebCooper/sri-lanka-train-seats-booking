@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router';
-import { ShieldCheck, ArrowRight, Train, Ticket, BarChart3, Settings, Users } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Train, Calendar, BarChart3, Settings, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const DashboardOverview: React.FC = () => {
@@ -74,30 +74,34 @@ export const DashboardOverview: React.FC = () => {
           </div>
         </Link>
 
-        {/* Additional Option Cards (Offline Modules) */}
-        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
-          <div>
-            <div className="flex items-start justify-between mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
-                <Ticket className="w-7 h-7" />
+        {/* Train Calendar & Schedule Management Card (Active Link) */}
+        <Link to="/dashboard/schedule-management" className="no-underline flex h-full group">
+          <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-white border border-slate-200/90 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-300 transition-all duration-200 hover:-translate-y-1">
+            <div>
+              <div className="flex items-start justify-between mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 text-purple-600 flex items-center justify-center shadow-md shadow-purple-500/10">
+                  <Calendar className="w-7 h-7" />
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Active
+                </span>
               </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
-                Offline
-              </span>
+              <h2 className="text-xl font-bold text-slate-900 mb-2.5 group-hover:text-purple-600 transition-colors">
+                Train Calendar & Schedules
+              </h2>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Create train departure timetables, schedule train sessions along line routes, set departure & arrival times, and manage operational calendars.
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
-              Seat Bookings
-            </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              View passenger seat reservations, temporary seat holds, fare calculations, and booking logs.
-            </p>
-          </div>
 
-          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
-            <span>Module Offline</span>
+            <div className="flex items-center justify-between pt-5 border-t border-slate-100 text-sm font-semibold text-purple-600 group-hover:text-purple-700">
+              <span>Open Module</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </div>
           </div>
-        </div>
+        </Link>
 
+        {/* Additional Option Cards (Offline Modules) */}
         <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
           <div>
             <div className="flex items-start justify-between mb-6">
@@ -162,7 +166,7 @@ export const DashboardOverview: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-sm font-semibold text-slate-400">
+          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-slate-400">
             <span>Module Offline</span>
           </div>
         </div>

@@ -20,14 +20,14 @@ import { ScheduleService } from './schedule.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { QueryScheduleDto } from './dto/query-schedule.dto';
-import { AdminOnly, RolesGuard } from '../../auth';
+import { AdminOnly, AuthGuard, RolesGuard } from '../../auth';
 
 @ApiTags('Admin - Schedules')
 @ApiBearerAuth('bearer')
 @ApiCookieAuth('better-auth.session_token')
 @Controller('admin/schedules')
 @AdminOnly()
-@UseGuards(RolesGuard)
+@UseGuards(AuthGuard, RolesGuard)
 export class AdminScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
