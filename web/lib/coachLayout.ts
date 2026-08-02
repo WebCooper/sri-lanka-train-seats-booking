@@ -1,8 +1,24 @@
 export const COACH_CLASS_LABELS: Record<string, string> = {
-  FIRST: '1st Class (AC Saloon)',
-  SECOND: '2nd Class (Reserved)',
-  THIRD: '3rd Class (Reserved)',
+  FIRST: '1st Class',
+  SECOND: '2nd Class',
+  THIRD: '3rd Class',
   OBSERVATION: 'Observation',
+};
+
+export interface SeatMapLayoutMetrics {
+  seatSize: number;
+  seatGap: number;
+  rowGap: number;
+  aisleWidth: number;
+  coachPadding: number;
+}
+
+const BASE_SEAT_MAP_LAYOUT: SeatMapLayoutMetrics = {
+  seatSize: 44,
+  seatGap: 6,
+  rowGap: 8,
+  aisleWidth: 24,
+  coachPadding: 16,
 };
 
 export function parseSeatConfiguration(seatConfiguration: string): number[] {
@@ -49,3 +65,76 @@ export function splitRowSeats(
 
   return sections;
 }
+
+export function estimateRowWidth(
+  seatConfiguration: string,
+  layout: SeatMapLayoutMetrics,
+): number {
+  const groups = parseSeatConfiguration(seatConfiguration);
+  const { seatSize, seatGap, aisleWidth } = layout;
+
+  return (
+    groups.reduce(
+      (sum, groupSize) => sum + groupSize * seatSize + Math.max(0, groupSize - 1) * seatGap,
+      0,
+    ) + Math.max(0, groups.length - 1) * aisleWidth
+  );
+}
+
+export function estimateCoachStackHeight(
+  rowCount: number,
+  layout: SeatMapLayoutMetrics,
+): number {
+  const { seatSize, rowGap } = layout;
+  return rowCount * seatSize + Math.max(0, rowCount - 1) * rowGap;
+}
+
+/** Unrotated coach frame tuned to the 2+2 layout the UI was designed around. */
+export const COACH_FRAME = {
+  referenceConfiguration: '2+2',
+  bodyWidth:
+    estimateRowWidth('2+2', BASE_SEAT_MAP_LAYOUT) + BASE_SEAT_MAP_LAYOUT.coachPadding,
+  bodyHeight: 520,
+  viewportWidth: 520,
+  viewportHeight: 300,
+} as const;
+
+function scaleLayout(
+  layout: SeatMapLayoutMetrics,
+  scale: number,
+): SeatMapLayoutMetrics {
+  return {
+    seatSize: layout.seatSize * scale,
+    seatGap: layout.seatGap * scale,
+    rowGap: layout.rowGap * scale,
+    aisleWidth: layout.aisleWidth * scale,
+    coachPadding: layout.coachPadding * scale,
+  };
+}
+
+/**
+ * Keep the coach frame fixed (2+2 reference) and shrink seat metrics when a row
+ * is wider (2+3, 3+2) or when there are more rows than fit comfortably.
+ */
+export function resolveCoachSeatLayout(
+  rowCount: number,
+  seatConfiguration: string,
+): SeatMapLayoutMetrics {
+  let layout = { ...BASE_SEAT_MAP_LAYOUT };
+
+  const rowWidth = estimateRowWidth(seatConfiguration, layout);
+  if (rowWidth > COACH_FRAME.bodyWidth - layout.coachPadding) {
+    const availableWidth = COACH_FRAME.bodyWidth - layout.coachPadding;
+    layout = scaleLayout(layout, availableWidth / rowWidth);
+  }
+
+  const stackHeight = estimateCoachStackHeight(rowCount, layout);
+  const availableHeight = COACH_FRAME.bodyHeight - layout.coachPadding;
+  if (stackHeight > availableHeight) {
+    layout = scaleLayout(layout, availableHeight / stackHeight);
+  }
+
+  return layout;
+}
+
+export { BASE_SEAT_MAP_LAYOUT as SEAT_MAP_LAYOUT };

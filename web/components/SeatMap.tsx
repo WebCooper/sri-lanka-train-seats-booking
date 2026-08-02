@@ -4,8 +4,10 @@ import React from 'react';
 import type { SeatAvailabilityCoach, SeatAvailabilitySeat, SeatVisualState } from '../types/passenger';
 import {
   buildSeatRows,
-  COACH_CLASS_LABELS,
+  COACH_FRAME,
+  resolveCoachSeatLayout,
   splitRowSeats,
+  type SeatMapLayoutMetrics,
 } from '../lib/coachLayout';
 import { ArrowRight } from 'lucide-react';
 
@@ -16,10 +18,6 @@ interface SeatMapProps {
   lostSeatNumber: number | null;
   isInteractionDisabled: boolean;
   onSelectSeat: (seatNumber: number) => void;
-}
-
-function coachClassLabel(coachClass: string): string {
-  return COACH_CLASS_LABELS[coachClass] ?? coachClass;
 }
 
 function seatLookup(seats: SeatAvailabilitySeat[]): Map<number, SeatAvailabilitySeat> {
@@ -66,24 +64,37 @@ const SEAT_STATE_STYLES: Record<SeatVisualState, string> = {
 
 const SEAT_STATE_LABELS: Record<SeatVisualState, string> = {
   available: 'Available',
-  selected: 'Selected — confirm to hold',
+  selected: 'Selected — click again to deselect',
   holding: 'Your hold',
   lost: 'Lost — someone else took it',
   occupied: 'Unavailable for this leg',
 };
 
+function seatFontSize(seatSize: number): number {
+  if (seatSize >= 40) {
+    return 11;
+  }
+  if (seatSize >= 32) {
+    return 10;
+  }
+  return 9;
+}
+
 function SeatButton({
   seat,
   visualState,
   isInteractionDisabled,
+  layout,
   onSelect,
 }: {
   seat: SeatAvailabilitySeat;
   visualState: SeatVisualState;
   isInteractionDisabled: boolean;
+  layout: SeatMapLayoutMetrics;
   onSelect: (seatNumber: number) => void;
 }) {
-  const isClickable = visualState === 'available' && !isInteractionDisabled;
+  const isClickable =
+    (visualState === 'available' || visualState === 'selected') && !isInteractionDisabled;
 
   return (
     <button
@@ -91,7 +102,12 @@ function SeatButton({
       disabled={!isClickable}
       onClick={() => isClickable && onSelect(seat.seat_number)}
       title={`Seat ${seat.seat_number}: ${SEAT_STATE_LABELS[visualState]}`}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold transition-all sm:h-11 sm:w-11 sm:text-xs ${SEAT_STATE_STYLES[visualState]}`}
+      className={`flex shrink-0 items-center justify-center rounded-lg border font-bold transition-all ${SEAT_STATE_STYLES[visualState]}`}
+      style={{
+        width: layout.seatSize,
+        height: layout.seatSize,
+        fontSize: seatFontSize(layout.seatSize),
+      }}
     >
       {seat.seat_number}
     </button>
@@ -117,43 +133,11 @@ export function SeatMap({
   const seatConfiguration = coach.seat_configuration || '2+2';
   const rows = buildSeatRows(coach.seat_count, seatConfiguration);
   const seatsByNumber = seatLookup(coach.seats);
+  const layout = resolveCoachSeatLayout(rows.length, seatConfiguration);
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-bold text-slate-900">Coach {coach.identifier}</h4>
-          <p className="mt-1 text-xs text-slate-500">
-            {coachClassLabel(coach.coach_class)} • {seatConfiguration} seating •{' '}
-            {coach.available_seats_count} of {coach.seat_count} available
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-600">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded border border-slate-200 bg-white" />
-            Available
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded border border-indigo-500 bg-indigo-100" />
-            Selected
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded border border-emerald-600 bg-emerald-600" />
-            Your hold
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded bg-slate-200" />
-            Held / booked overlap
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded border border-rose-400 bg-rose-100" />
-            Lost seat
-          </span>
-        </div>
-      </div>
-
-      <div className="overflow-auto rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-2 py-1 sm:px-3">
+      <div className="overflow-auto rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-100 to-slate-50 px-2 py-3 sm:px-3">
         <div className="mx-auto w-full max-w-4xl">
           <div className="mb-1.5 flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
             <span>Back</span>
@@ -168,67 +152,87 @@ export function SeatMap({
             <span className="text-indigo-500">Front</span>
           </div>
 
-          <div className="flex justify-center overflow-visible">
-            <div className="inline-flex items-center justify-center">
-              <div className="origin-center rotate-90">
-                <div className="rounded-xl border-2 border-slate-300/80 bg-white px-2 py-1 shadow-inner sm:px-3 sm:py-1">
-                  <div className="space-y-2">
-                    {rows.map((rowSeats, rowIndex) => {
-                      const sections = splitRowSeats(rowSeats, seatConfiguration);
+          <div
+            className="mx-auto flex items-center justify-center"
+            style={{
+              width: COACH_FRAME.viewportWidth,
+              height: COACH_FRAME.viewportHeight,
+            }}
+          >
+            <div className="origin-center rotate-90">
+              <div
+                className="flex items-center justify-center rounded-xl border-2 border-slate-300/80 bg-white shadow-inner"
+                style={{
+                  width: COACH_FRAME.bodyWidth,
+                  height: COACH_FRAME.bodyHeight,
+                  padding: layout.coachPadding / 2,
+                }}
+              >
+                <div className="flex flex-col" style={{ gap: layout.rowGap }}>
+                  {rows.map((rowSeats, rowIndex) => {
+                    const sections = splitRowSeats(rowSeats, seatConfiguration);
 
-                      return (
-                        <div
-                          key={`row-${rowIndex}`}
-                          className="flex items-center justify-center gap-2 sm:gap-3"
-                        >
-                          {sections.map((sectionSeats, sectionIndex) => (
-                            <React.Fragment key={`section-${rowIndex}-${sectionIndex}`}>
-                              {sectionIndex > 0 && (
-                                <div
-                                  className="mx-0.5 flex h-11 w-6 shrink-0 flex-col items-center justify-center sm:w-7"
-                                  aria-hidden="true"
+                    return (
+                      <div
+                        key={`row-${rowIndex}`}
+                        className="flex items-center justify-center"
+                        style={{ gap: layout.seatGap }}
+                      >
+                        {sections.map((sectionSeats, sectionIndex) => (
+                          <React.Fragment key={`section-${rowIndex}-${sectionIndex}`}>
+                            {sectionIndex > 0 && (
+                              <div
+                                className="flex shrink-0 flex-col items-center justify-center"
+                                style={{
+                                  width: layout.aisleWidth,
+                                  height: layout.seatSize,
+                                }}
+                                aria-hidden="true"
+                              >
+                                <div className="h-full w-px bg-slate-200" />
+                                <span
+                                  className="-rotate-90 my-1 whitespace-nowrap font-semibold uppercase tracking-wider text-slate-300"
+                                  style={{ fontSize: Math.max(7, layout.seatSize * 0.2) }}
                                 >
-                                  <div className="h-full w-px bg-slate-200" />
-                                  <span className="-rotate-90 my-1 whitespace-nowrap text-[9px] font-semibold uppercase tracking-wider text-slate-300">
-                                    Aisle
-                                  </span>
-                                  <div className="h-full w-px bg-slate-200" />
-                                </div>
-                              )}
-
-                              <div className="flex items-center gap-1.5 sm:gap-2">
-                                {sectionSeats.map((seatNumber) => {
-                                  const seat = seatsByNumber.get(seatNumber);
-                                  if (!seat) {
-                                    return null;
-                                  }
-
-                                  const visualState = resolveSeatVisualState(
-                                    seat,
-                                    coach.coach_id,
-                                    pendingSeat,
-                                    activeHold,
-                                    lostSeatNumber,
-                                  );
-
-                                  return (
-                                    <div key={seat.seat_number} className="-rotate-90">
-                                      <SeatButton
-                                        seat={seat}
-                                        visualState={visualState}
-                                        isInteractionDisabled={isInteractionDisabled}
-                                        onSelect={onSelectSeat}
-                                      />
-                                    </div>
-                                  );
-                                })}
+                                  Aisle
+                                </span>
+                                <div className="h-full w-px bg-slate-200" />
                               </div>
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            )}
+
+                            <div className="flex items-center" style={{ gap: layout.seatGap }}>
+                              {sectionSeats.map((seatNumber) => {
+                                const seat = seatsByNumber.get(seatNumber);
+                                if (!seat) {
+                                  return null;
+                                }
+
+                                const visualState = resolveSeatVisualState(
+                                  seat,
+                                  coach.coach_id,
+                                  pendingSeat,
+                                  activeHold,
+                                  lostSeatNumber,
+                                );
+
+                                return (
+                                  <div key={seat.seat_number} className="-rotate-90">
+                                    <SeatButton
+                                      seat={seat}
+                                      visualState={visualState}
+                                      isInteractionDisabled={isInteractionDisabled}
+                                      layout={layout}
+                                      onSelect={onSelectSeat}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -237,6 +241,29 @@ export function SeatMap({
           <p className="mt-1 text-center text-[10px] text-slate-400">
             Coach shown lengthwise — front on the right ({seatConfiguration} per row).
           </p>
+
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 border-t border-slate-200/80 pt-3 text-[10px] text-slate-600">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded border border-slate-200 bg-white" />
+              Available
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded border border-indigo-500 bg-indigo-100" />
+              Selected
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded border border-emerald-600 bg-emerald-600" />
+              Your hold
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded bg-slate-200" />
+              Held / booked overlap
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded border border-rose-400 bg-rose-100" />
+              Lost seat
+            </span>
+          </div>
         </div>
       </div>
     </div>

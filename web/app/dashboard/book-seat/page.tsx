@@ -362,6 +362,13 @@ export default function BookSeatPage() {
     if (isMapInteractionDisabled) {
       return;
     }
+
+    if (pendingSeat === seatNumber) {
+      setPendingSeat(null);
+      setHoldError(null);
+      return;
+    }
+
     setPendingSeat(seatNumber);
     setLostSeatNumber(null);
     setHoldError(null);
@@ -667,6 +674,64 @@ export default function BookSeatPage() {
                 )}
               </div>
 
+              <div className="mb-5 space-y-4 border-b border-slate-100 pb-5">
+
+                {holdError && (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    {holdError}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs text-slate-500">Selection status</span>
+                    <div className="text-sm font-bold text-slate-900">
+                      {activeHold
+                        ? `Holding seat ${activeHold.seatNumber}`
+                        : pendingSeat && selectedCoach
+                          ? `Seat ${pendingSeat} selected`
+                          : 'No seat selected'}
+                          
+                    </div>
+                    <span className="text-xs text-slate-500">Hold will start 10 minutes timer for payment and confirmation.</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleConfirmHold}
+                      disabled={
+                        !pendingSeat ||
+                        !selectedCoach ||
+                        isHoldingSeat ||
+                        isRefreshingSeats ||
+                        Boolean(activeHold)
+                      }
+                      className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
+                    >
+                      {isHoldingSeat ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Holding seat...
+                        </span>
+                      ) : (
+                        'Confirm & hold seat'
+                      )}
+                    </button>
+
+                    {activeHold && (
+                      <button
+                        type="button"
+                        onClick={openPaymentModal}
+                        className="rounded-xl border border-indigo-200 bg-white px-6 py-3 text-xs font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50"
+                      >
+                        Pay now
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {!selectedSchedule && (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
                   Choose a scheduled train to load the seat map for your selected leg.
@@ -738,75 +803,6 @@ export default function BookSeatPage() {
                     />
                   </>
                 )}
-
-              <div className="mt-6 space-y-4 border-t border-slate-100 pt-5">
-                {pendingSeat && !activeHold && (
-                  <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-                    <p className="font-semibold">
-                      Seat {pendingSeat} selected on coach {selectedCoach?.identifier ?? '—'}
-                    </p>
-                    <p className="mt-2 text-xs text-indigo-700">
-                      Confirm below to start the 10-minute hold timer.
-                    </p>
-                  </div>
-                )}
-
-                {holdError && (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    {holdError}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <span className="text-xs text-slate-500">Selection status</span>
-                    <div className="text-sm font-bold text-slate-900">
-                      {activeHold
-                        ? `Holding seat ${activeHold.seatNumber}`
-                        : pendingSeat && selectedCoach
-                          ? `Seat ${pendingSeat} selected — confirm to hold`
-                          : 'No seat selected'}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Seat map refreshes every 7s in the background while visible.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleConfirmHold}
-                    disabled={
-                      !pendingSeat ||
-                      !selectedCoach ||
-                      isHoldingSeat ||
-                      isRefreshingSeats ||
-                      Boolean(activeHold)
-                    }
-                    className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
-                  >
-                    {isHoldingSeat ? (
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Holding seat...
-                      </span>
-                    ) : (
-                      'Confirm & hold seat'
-                    )}
-                  </button>
-
-                  {activeHold && (
-                    <button
-                      type="button"
-                      onClick={openPaymentModal}
-                      className="rounded-xl border border-indigo-200 bg-white px-6 py-3 text-xs font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50"
-                    >
-                      Pay now
-                    </button>
-                  )}
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
