@@ -94,53 +94,36 @@ export class PassengerScheduleService {
   }
 
   /**
-   * Search for train schedules with optional filters.
+   * Search for train schedules with date, origin, and destination.
+   * Returns only schedules that have at least one available reserved seat on the segment.
    */
   async searchSchedules(query: SearchScheduleDto) {
-    const {
-      date,
-      date_from,
-      date_to,
-      origin_id,
-      destination_id,
-      line_id,
-      train_id,
-      train_name,
-    } = query;
+    const { date, origin_id, destination_id } = query;
 
-    if (origin_id && destination_id && origin_id === destination_id) {
+    if (origin_id === destination_id) {
       throw new BadRequestException('Origin and Destination stations cannot be the same');
     }
 
-    if ((origin_id && !destination_id) || (!origin_id && destination_id)) {
-      throw new BadRequestException('Both origin_id and destination_id are required when filtering by route');
+    const { startDate, endDate } = this.resolveDateRange(date);
+
+    const [origin, destination] = await Promise.all([
+      prisma.station.findUnique({ where: { id: origin_id } }),
+      prisma.station.findUnique({ where: { id: destination_id } }),
+    ]);
+
+    if (!origin) {
+      throw new NotFoundException(`Origin station with ID "${origin_id}" not found`);
+    }
+    if (!destination) {
+      throw new NotFoundException(`Destination station with ID "${destination_id}" not found`);
     }
 
-    const { startDate, endDate } = this.resolveDateRange(date, date_from, date_to);
-
-    let originStation: { id: string; name: string; code: string } | null = null;
-    let destinationStation: { id: string; name: string; code: string } | null = null;
-
-    if (origin_id && destination_id) {
-      const [origin, destination] = await Promise.all([
-        prisma.station.findUnique({ where: { id: origin_id } }),
-        prisma.station.findUnique({ where: { id: destination_id } }),
-      ]);
-
-      if (!origin) {
-        throw new NotFoundException(`Origin station with ID "${origin_id}" not found`);
-      }
-      if (!destination) {
-        throw new NotFoundException(`Destination station with ID "${destination_id}" not found`);
-      }
-
-      originStation = { id: origin.id, name: origin.name, code: origin.code };
-      destinationStation = {
-        id: destination.id,
-        name: destination.name,
-        code: destination.code,
-      };
-    }
+    const originStation = { id: origin.id, name: origin.name, code: origin.code };
+    const destinationStation = {
+      id: destination.id,
+      name: destination.name,
+      code: destination.code,
+    };
 
     const allLines = await prisma.line.findMany({
       include: {
@@ -152,34 +135,20 @@ export class PassengerScheduleService {
       },
     });
 
-    let validLineIds: string[] | null = null;
+    const validLineIds = findValidLineIds(allLines, origin_id, destination_id);
 
-    if (origin_id && destination_id) {
-      validLineIds = findValidLineIds(allLines, origin_id, destination_id);
-
-      if (validLineIds.length === 0) {
-        return this.buildSearchResponse({
-          startDate,
-          endDate,
-          originStation,
-          destinationStation,
-          schedules: [],
-        });
-      }
+    if (validLineIds.length === 0) {
+      return this.buildSearchResponse({
+        date: startDate,
+        originStation,
+        destinationStation,
+        schedules: [],
+      });
     }
 
     const schedules = await prisma.schedule.findMany({
       where: {
-        ...(validLineIds ? { lineId: { in: validLineIds } } : {}),
-        ...(line_id ? { lineId: line_id } : {}),
-        ...(train_id ? { trainId: train_id } : {}),
-        ...(train_name
-          ? {
-              train: {
-                name: { contains: train_name.trim(), mode: 'insensitive' },
-              },
-            }
-          : {}),
+        lineId: { in: validLineIds },
         departureTime: {
           gte: startDate,
           lte: endDate,
@@ -189,31 +158,33 @@ export class PassengerScheduleService {
       include: this.scheduleInclude,
     });
 
-    const formattedSchedules = await Promise.all(
-      schedules.map(async (schedule) => {
-        const line = schedule.line;
-        const segmentOriginId = origin_id ?? line.startStationId;
-        const segmentDestId = destination_id ?? line.endStationId;
-        const reservedCoaches = this.getReservedCoaches(schedule.train.coaches);
-        const availableReservedSeats = await this.countAvailableReservedSeats(
-          schedule.id,
-          line,
-          segmentOriginId,
-          segmentDestId,
-          reservedCoaches,
-        );
+    const formattedSchedules: ReturnType<PassengerScheduleService['formatScheduleItem']>[] = [];
 
-        return this.formatScheduleItem(schedule, {
-          originId: segmentOriginId,
-          destinationId: segmentDestId,
-          availableReservedSeats,
-        });
-      }),
-    );
+    for (const schedule of schedules) {
+      const line = schedule.line;
+      const reservedCoaches = this.getReservedCoaches(schedule.train.coaches);
+      const hasAvailableSeat = await this.hasAvailableReservedSeat(
+        schedule.id,
+        line,
+        origin_id,
+        destination_id,
+        reservedCoaches,
+      );
+
+      if (!hasAvailableSeat) {
+        continue;
+      }
+
+      formattedSchedules.push(
+        this.formatScheduleItem(schedule, {
+          originId: origin_id,
+          destinationId: destination_id,
+        }),
+      );
+    }
 
     return this.buildSearchResponse({
-      startDate,
-      endDate,
+      date: startDate,
       originStation,
       destinationStation,
       schedules: formattedSchedules,
@@ -333,25 +304,12 @@ export class PassengerScheduleService {
     });
   }
 
-  private resolveDateRange(date?: string, dateFrom?: string, dateTo?: string) {
-    const resolvedFrom = dateFrom ?? date;
-    const resolvedTo = dateTo ?? date ?? dateFrom;
-
-    if (!resolvedFrom || !resolvedTo) {
-      throw new BadRequestException(
-        'Provide date or both date_from and date_to for schedule search',
-      );
-    }
-
-    const startDate = new Date(resolvedFrom);
+  private resolveDateRange(date: string) {
+    const startDate = new Date(date);
     startDate.setUTCHours(0, 0, 0, 0);
 
-    const endDate = new Date(resolvedTo);
+    const endDate = new Date(date);
     endDate.setUTCHours(23, 59, 59, 999);
-
-    if (startDate.getTime() > endDate.getTime()) {
-      throw new BadRequestException('date_from cannot be after date_to');
-    }
 
     return { startDate, endDate };
   }
@@ -362,6 +320,45 @@ export class PassengerScheduleService {
     return trainCoaches
       .map((tc) => tc.coach)
       .filter((coach) => coach.isReserved && coach.seatCount > 0);
+  }
+
+  private async hasAvailableReservedSeat(
+    scheduleId: string,
+    line: LineWithStations,
+    originId: string,
+    destId: string,
+    reservedCoaches: CoachRecord[],
+  ): Promise<boolean> {
+    if (reservedCoaches.length === 0) {
+      return false;
+    }
+
+    const sequence = buildStationSequence(line);
+    const querySegment = getSegmentPositions(sequence, originId, destId);
+
+    if (!querySegment) {
+      return false;
+    }
+
+    const occupancies = await this.segmentAllocation.fetchBlockingAllocations(scheduleId);
+
+    for (const coach of reservedCoaches) {
+      for (let seatNo = 1; seatNo <= coach.seatCount; seatNo++) {
+        const isOccupied = this.segmentAllocation.hasSeatSegmentConflict(
+          coach.id,
+          seatNo,
+          querySegment.originPos,
+          querySegment.destPos,
+          occupancies,
+        );
+
+        if (!isOccupied) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   private async countAvailableReservedSeats(
@@ -409,7 +406,7 @@ export class PassengerScheduleService {
     options: {
       originId: string;
       destinationId: string;
-      availableReservedSeats: number;
+      availableReservedSeats?: number;
     },
   ) {
     const departure = new Date(schedule.departureTime);
@@ -449,7 +446,9 @@ export class PassengerScheduleService {
       travel_date: departure.toISOString().slice(0, 10),
       duration_minutes: durationMinutes,
       total_reserved_seat_capacity: totalReservedSeats,
-      available_reserved_seats_count: options.availableReservedSeats,
+      ...(options.availableReservedSeats !== undefined
+        ? { available_reserved_seats_count: options.availableReservedSeats }
+        : { has_available_seats: true }),
       segment: {
         origin_id: options.originId,
         destination_id: options.destinationId,
@@ -458,15 +457,13 @@ export class PassengerScheduleService {
   }
 
   private buildSearchResponse(params: {
-    startDate: Date;
-    endDate: Date;
-    originStation: { id: string; name: string; code: string } | null;
-    destinationStation: { id: string; name: string; code: string } | null;
+    date: Date;
+    originStation: { id: string; name: string; code: string };
+    destinationStation: { id: string; name: string; code: string };
     schedules: ReturnType<PassengerScheduleService['formatScheduleItem']>[];
   }) {
     return {
-      date_from: params.startDate.toISOString().slice(0, 10),
-      date_to: params.endDate.toISOString().slice(0, 10),
+      date: params.date.toISOString().slice(0, 10),
       origin: params.originStation,
       destination: params.destinationStation,
       total_schedules: params.schedules.length,

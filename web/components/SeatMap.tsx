@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { SeatAvailabilityCoach, SeatAvailabilitySeat } from '../types/passenger';
+import type { SeatAvailabilityCoach, SeatAvailabilitySeat, SeatVisualState } from '../types/passenger';
 import {
   buildSeatRows,
   COACH_CLASS_LABELS,
@@ -11,7 +11,10 @@ import { ArrowRight } from 'lucide-react';
 
 interface SeatMapProps {
   coach: SeatAvailabilityCoach | null;
-  selectedSeat: number | null;
+  pendingSeat: number | null;
+  activeHold: { seatNumber: number; coachId: string } | null;
+  lostSeatNumber: number | null;
+  isInteractionDisabled: boolean;
   onSelectSeat: (seatNumber: number) => void;
 }
 
@@ -23,37 +26,86 @@ function seatLookup(seats: SeatAvailabilitySeat[]): Map<number, SeatAvailability
   return new Map(seats.map((seat) => [seat.seat_number, seat]));
 }
 
+function resolveSeatVisualState(
+  seat: SeatAvailabilitySeat,
+  coachId: string,
+  pendingSeat: number | null,
+  activeHold: { seatNumber: number; coachId: string } | null,
+  lostSeatNumber: number | null,
+): SeatVisualState {
+  if (lostSeatNumber === seat.seat_number) {
+    return 'lost';
+  }
+
+  if (activeHold?.coachId === coachId && activeHold.seatNumber === seat.seat_number) {
+    return 'holding';
+  }
+
+  if (pendingSeat === seat.seat_number) {
+    return 'selected';
+  }
+
+  if (seat.is_available) {
+    return 'available';
+  }
+
+  return 'occupied';
+}
+
+const SEAT_STATE_STYLES: Record<SeatVisualState, string> = {
+  available:
+    'cursor-pointer border-slate-200 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50',
+  selected:
+    'cursor-pointer border-indigo-500 bg-indigo-100 text-indigo-800 ring-2 ring-indigo-400/40',
+  holding:
+    'cursor-default border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25',
+  lost:
+    'cursor-not-allowed border-rose-400 bg-rose-100 text-rose-700 ring-2 ring-rose-300/60',
+  occupied: 'cursor-not-allowed border-slate-300 bg-slate-200 text-slate-500',
+};
+
+const SEAT_STATE_LABELS: Record<SeatVisualState, string> = {
+  available: 'Available',
+  selected: 'Selected — confirm to hold',
+  holding: 'Your hold',
+  lost: 'Lost — someone else took it',
+  occupied: 'Unavailable for this leg',
+};
+
 function SeatButton({
   seat,
-  isSelected,
+  visualState,
+  isInteractionDisabled,
   onSelect,
 }: {
   seat: SeatAvailabilitySeat;
-  isSelected: boolean;
+  visualState: SeatVisualState;
+  isInteractionDisabled: boolean;
   onSelect: (seatNumber: number) => void;
 }) {
-  const isAvailable = seat.is_available;
+  const isClickable = visualState === 'available' && !isInteractionDisabled;
 
   return (
     <button
       type="button"
-      disabled={!isAvailable}
-      onClick={() => onSelect(seat.seat_number)}
-      title={isAvailable ? `Select seat ${seat.seat_number}` : `Seat ${seat.seat_number} occupied`}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold transition-all sm:h-11 sm:w-11 sm:text-xs ${
-        isSelected
-          ? 'cursor-pointer border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
-          : isAvailable
-            ? 'cursor-pointer border-slate-200 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50'
-            : 'cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400'
-      }`}
+      disabled={!isClickable}
+      onClick={() => isClickable && onSelect(seat.seat_number)}
+      title={`Seat ${seat.seat_number}: ${SEAT_STATE_LABELS[visualState]}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border text-[11px] font-bold transition-all sm:h-11 sm:w-11 sm:text-xs ${SEAT_STATE_STYLES[visualState]}`}
     >
       {seat.seat_number}
     </button>
   );
 }
 
-export function SeatMap({ coach, selectedSeat, onSelectSeat }: SeatMapProps) {
+export function SeatMap({
+  coach,
+  pendingSeat,
+  activeHold,
+  lostSeatNumber,
+  isInteractionDisabled,
+  onSelectSeat,
+}: SeatMapProps) {
   if (!coach) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
@@ -70,27 +122,33 @@ export function SeatMap({ coach, selectedSeat, onSelectSeat }: SeatMapProps) {
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-bold text-slate-900">
-            Coach {coach.identifier}
-          </h4>
+          <h4 className="text-sm font-bold text-slate-900">Coach {coach.identifier}</h4>
           <p className="mt-1 text-xs text-slate-500">
             {coachClassLabel(coach.coach_class)} • {seatConfiguration} seating •{' '}
             {coach.available_seats_count} of {coach.seat_count} available
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded border border-indigo-600 bg-indigo-600" />
-            Selected
-          </span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-600">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded border border-slate-200 bg-white" />
             Available
           </span>
           <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded border border-indigo-500 bg-indigo-100" />
+            Selected
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded border border-emerald-600 bg-emerald-600" />
+            Your hold
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded bg-slate-200" />
-            Occupied
+            Held / booked overlap
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded border border-rose-400 bg-rose-100" />
+            Lost seat
           </span>
         </div>
       </div>
@@ -145,11 +203,20 @@ export function SeatMap({ coach, selectedSeat, onSelectSeat }: SeatMapProps) {
                                     return null;
                                   }
 
+                                  const visualState = resolveSeatVisualState(
+                                    seat,
+                                    coach.coach_id,
+                                    pendingSeat,
+                                    activeHold,
+                                    lostSeatNumber,
+                                  );
+
                                   return (
                                     <div key={seat.seat_number} className="-rotate-90">
                                       <SeatButton
                                         seat={seat}
-                                        isSelected={selectedSeat === seat.seat_number}
+                                        visualState={visualState}
+                                        isInteractionDisabled={isInteractionDisabled}
                                         onSelect={onSelectSeat}
                                       />
                                     </div>

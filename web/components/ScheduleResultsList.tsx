@@ -59,14 +59,10 @@ export function ScheduleResultsList({
                 </div>
               </div>
 
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  schedule.available_reserved_seats_count > 0
-                    ? 'border-emerald-200 bg-emerald-100 text-emerald-800'
-                    : 'border-rose-200 bg-rose-100 text-rose-800'
-                }`}
-              >
-                {schedule.available_reserved_seats_count} reserved seats free
+              <span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                {schedule.available_reserved_seats_count !== undefined
+                  ? `${schedule.available_reserved_seats_count} reserved seats free`
+                  : 'Seats available'}
               </span>
             </div>
           </button>

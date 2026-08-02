@@ -36,7 +36,7 @@ export class PassengerScheduleController {
   @ApiOperation({
     summary: 'Search for available train schedules',
     description:
-      'Finds train schedules filtered by date range, line, train, and optional origin/destination segment.',
+      'Finds train schedules for a travel date and journey segment that have at least one reserved seat available.',
   })
   @ApiResponse({ status: 200, description: 'Matching schedules returned.' })
   @ApiResponse({ status: 400, description: 'Bad Request - Invalid filters.' })

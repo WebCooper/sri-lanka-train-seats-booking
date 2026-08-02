@@ -85,12 +85,12 @@ export function UpcomingTrainsSection() {
                     </div>
                     <span
                       className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                        schedule.available_reserved_seats_count > 0
+                        (schedule.available_reserved_seats_count ?? 0) > 0
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                           : 'border-rose-200 bg-rose-50 text-rose-700'
                       }`}
                     >
-                      {schedule.available_reserved_seats_count} seats free
+                      {schedule.available_reserved_seats_count ?? 0} seats free
                     </span>
                   </div>
 

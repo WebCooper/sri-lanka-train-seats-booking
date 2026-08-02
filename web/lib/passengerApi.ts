@@ -1,5 +1,11 @@
 import axiosInstance from './axiosInstance';
 import type {
+  BookingTicket,
+  ConfirmBookingPayload,
+  FareQuote,
+  FareQuotePayload,
+  HoldSeatPayload,
+  HoldSeatResponse,
   Line,
   SearchSchedulesParams,
   SearchSchedulesResponse,
@@ -51,6 +57,23 @@ export const fetchSeatAvailabilityApi = async (
     `/api/v1/schedules/${scheduleId}/seats`,
     { params },
   );
+  return response.data;
+};
+
+export const quoteFareApi = async (payload: FareQuotePayload): Promise<FareQuote> => {
+  const response = await axiosInstance.post<FareQuote>('/api/v1/bookings/quote', payload);
+  return response.data;
+};
+
+export const holdSeatApi = async (payload: HoldSeatPayload): Promise<HoldSeatResponse> => {
+  const response = await axiosInstance.post<HoldSeatResponse>('/api/v1/bookings/hold', payload);
+  return response.data;
+};
+
+export const confirmBookingApi = async (
+  payload: ConfirmBookingPayload,
+): Promise<BookingTicket> => {
+  const response = await axiosInstance.post<BookingTicket>('/api/v1/bookings', payload);
   return response.data;
 };
 

@@ -7,6 +7,7 @@ interface CoachSelectorProps {
   coaches: SeatAvailabilityCoach[];
   selectedCoachId: string | null;
   onSelect: (coachId: string) => void;
+  disabled?: boolean;
 }
 
 function coachClassLabel(coachClass: string): string {
@@ -17,6 +18,7 @@ export function CoachSelector({
   coaches,
   selectedCoachId,
   onSelect,
+  disabled = false,
 }: CoachSelectorProps) {
   if (coaches.length === 0) {
     return (
@@ -35,8 +37,9 @@ export function CoachSelector({
           <button
             key={coach.coach_id}
             type="button"
+            disabled={disabled}
             onClick={() => onSelect(coach.coach_id)}
-            className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
+            className={`rounded-xl border px-3 py-2.5 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
               isSelected
                 ? 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400'
