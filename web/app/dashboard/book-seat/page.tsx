@@ -1,229 +1,808 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import axios from 'axios';
 import { PassengerLayout } from '../../../components/PassengerLayout';
-import { ChevronRight, Ticket, MapPin, Calendar, Search, Train, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ScheduleResultsList } from '../../../components/ScheduleResultsList';
+import { CoachSelector } from '../../../components/CoachSelector';
+import { SeatMap } from '../../../components/SeatMap';
+import { StationCombobox } from '../../../components/StationCombobox';
+import { HoldTimerPopup } from '../../../components/HoldTimerPopup';
+import { PaymentModal } from '../../../components/PaymentModal';
+import { usePassengerAuth } from '../../../context/PassengerAuthContext';
 import toast from 'react-hot-toast';
+import {
+  ChevronRight,
+  Calendar,
+  Search,
+  Train,
+  RefreshCw,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
+import { getApiErrorMessage } from '../../../lib/axiosInstance';
+import {
+  fetchSeatAvailabilityApi,
+  fetchStationsApi,
+  holdSeatApi,
+  searchSchedulesApi,
+} from '../../../lib/passengerApi';
+import type {
+  BookingTicket,
+  HoldSeatResponse,
+  ScheduleSummary,
+  SeatAvailabilityResponse,
+  Station,
+} from '../../../types/passenger';
+
+const POLL_INTERVAL_MS = 7000;
+const todayIsoDate = (): string => new Date().toISOString().slice(0, 10);
+
+type SeatLoadState = 'idle' | 'loading' | 'success' | 'error';
+
+interface ActiveHoldState {
+  holdId: string;
+  coachId: string;
+  seatNumber: number;
+  coachIdentifier: string;
+  coachClass: string;
+  expiresAt: string;
+}
 
 export default function BookSeatPage() {
-  const [origin, setOrigin] = useState('Colombo Fort');
-  const [destination, setDestination] = useState('Badulla');
-  const [travelDate, setTravelDate] = useState('2026-08-05');
-  const [coachClass, setCoachClass] = useState('2nd Class Reserved');
-  const [selectedSeat, setSelectedSeat] = useState<number | null>(12);
-  const [isReserving, setIsReserving] = useState(false);
+  const { user } = usePassengerAuth();
+  const [stations, setStations] = useState<Station[]>([]);
+  const [searchResults, setSearchResults] = useState<ScheduleSummary[]>([]);
+  const [selectedSchedule, setSelectedSchedule] = useState<ScheduleSummary | null>(null);
+  const [seatAvailability, setSeatAvailability] = useState<SeatAvailabilityResponse | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success(`Found 3 express trains running from ${origin} to ${destination}!`);
-  };
+  const [originId, setOriginId] = useState('');
+  const [destinationId, setDestinationId] = useState('');
+  const [travelDate, setTravelDate] = useState(todayIsoDate());
 
-  const handleReserveSeat = () => {
-    if (!selectedSeat) {
-      toast.error('Please select a seat number from the coach layout.');
+  const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null);
+  const [pendingSeat, setPendingSeat] = useState<number | null>(null);
+  const [lostSeatNumber, setLostSeatNumber] = useState<number | null>(null);
+  const [activeHold, setActiveHold] = useState<ActiveHoldState | null>(null);
+
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [seatLoadState, setSeatLoadState] = useState<SeatLoadState>('idle');
+  const [seatLoadError, setSeatLoadError] = useState<string | null>(null);
+  const [isRefreshingSeats, setIsRefreshingSeats] = useState(false);
+  const [isHoldingSeat, setIsHoldingSeat] = useState(false);
+  const [holdError, setHoldError] = useState<string | null>(null);
+  const [holdCountdownMs, setHoldCountdownMs] = useState<number | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentSession, setPaymentSession] = useState<{
+    hold: ActiveHoldState;
+    schedule: ScheduleSummary;
+    originId: string;
+    destinationId: string;
+  } | null>(null);
+
+  const seatMapVisible = Boolean(selectedSchedule && originId && destinationId);
+  const isMapInteractionDisabled =
+    isHoldingSeat || isRefreshingSeats || Boolean(activeHold);
+
+  const sortedStations = useMemo(
+    () => [...stations].sort((a, b) => a.name.localeCompare(b.name)),
+    [stations],
+  );
+
+  const stationById = useMemo(
+    () => new Map(stations.map((station) => [station.id, station])),
+    [stations],
+  );
+
+  const selectedCoach = useMemo(
+    () => seatAvailability?.coaches.find((coach) => coach.coach_id === selectedCoachId) ?? null,
+    [seatAvailability, selectedCoachId],
+  );
+
+  const clearHoldState = useCallback(() => {
+    setActiveHold(null);
+    setHoldCountdownMs(null);
+    setIsPaymentModalOpen(false);
+    setPaymentSession(null);
+  }, []);
+
+  const clearSeatSelection = useCallback(() => {
+    setPendingSeat(null);
+    setHoldError(null);
+    setLostSeatNumber(null);
+  }, []);
+
+  const loadSeatAvailability = useCallback(
+    async (
+      schedule: ScheduleSummary,
+      fromId: string,
+      toId: string,
+      options?: {
+        silent?: boolean;
+        preserveCoachId?: string | null;
+        preservePendingSeat?: number | null;
+      },
+    ) => {
+      if (!options?.silent) {
+        setSeatLoadState('loading');
+        setSeatLoadError(null);
+        setIsRefreshingSeats(true);
+      }
+
+      try {
+        const availability = await fetchSeatAvailabilityApi(schedule.schedule_id, {
+          origin_id: fromId,
+          destination_id: toId,
+        });
+
+        setSeatAvailability(availability);
+        setSeatLoadState('success');
+        setSeatLoadError(null);
+
+        const preferredCoachId =
+          options?.preserveCoachId ??
+          (availability.coaches.some((c) => c.coach_id === selectedCoachId)
+            ? selectedCoachId
+            : availability.coaches[0]?.coach_id ?? null);
+
+        setSelectedCoachId(preferredCoachId);
+
+        if (options?.preservePendingSeat) {
+          const coach = availability.coaches.find((c) => c.coach_id === preferredCoachId);
+          const seatStillAvailable = coach?.seats.some(
+            (seat) =>
+              seat.seat_number === options.preservePendingSeat && seat.is_available,
+          );
+          setPendingSeat(seatStillAvailable ? options.preservePendingSeat : null);
+        }
+      } catch (error) {
+        setSeatLoadState('error');
+        const message = getApiErrorMessage(error, 'Could not load seat availability.');
+        setSeatLoadError(message);
+        if (!options?.silent) {
+          setSeatAvailability(null);
+        }
+      } finally {
+        if (!options?.silent) {
+          setIsRefreshingSeats(false);
+        }
+      }
+    },
+    [selectedCoachId],
+  );
+
+  const refreshSeatMap = useCallback(
+    async (silent = true) => {
+      if (!selectedSchedule || !originId || !destinationId) {
+        return;
+      }
+
+      await loadSeatAvailability(selectedSchedule, originId, destinationId, {
+        silent,
+        preserveCoachId: selectedCoachId,
+        preservePendingSeat: pendingSeat,
+      });
+    },
+    [
+      destinationId,
+      loadSeatAvailability,
+      originId,
+      pendingSeat,
+      selectedCoachId,
+      selectedSchedule,
+    ],
+  );
+
+  const handleSelectSchedule = useCallback(
+    async (schedule: ScheduleSummary) => {
+      setSelectedSchedule(schedule);
+      clearSeatSelection();
+      clearHoldState();
+
+      const fromId = originId || schedule.segment.origin_id;
+      const toId = destinationId || schedule.segment.destination_id;
+
+      if (!fromId || !toId) {
+        setSeatLoadState('idle');
+        setSeatAvailability(null);
+        setSeatLoadError('Select origin and destination stations before choosing seats.');
+        return;
+      }
+
+      if (fromId === toId) {
+        setSeatLoadState('error');
+        setSeatLoadError('Origin and destination must be different.');
+        return;
+      }
+
+      await loadSeatAvailability(schedule, fromId, toId);
+    },
+    [clearSeatSelection, destinationId, loadSeatAvailability, originId],
+  );
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      setIsBootstrapping(true);
+      setBootstrapError(null);
+
+      try {
+        const stationData = await fetchStationsApi();
+        setStations(stationData);
+      } catch (error) {
+        setBootstrapError(getApiErrorMessage(error, 'Could not load booking data.'));
+      } finally {
+        setIsBootstrapping(false);
+      }
+    };
+
+    bootstrap();
+  }, []);
+
+  useEffect(() => {
+    if (!seatMapVisible || seatLoadState !== 'success') {
       return;
     }
 
-    setIsReserving(true);
-    setTimeout(() => {
-      setIsReserving(false);
-      toast.success(`Seat #${selectedSeat} reserved successfully! E-ticket QR code generated.`);
-    }, 1200);
+    const intervalId = window.setInterval(() => {
+      refreshSeatMap(true);
+    }, POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [refreshSeatMap, seatLoadState, seatMapVisible]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (seatMapVisible) {
+        refreshSeatMap(true);
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshSeatMap, seatMapVisible]);
+
+  useEffect(() => {
+    if (!activeHold?.expiresAt) {
+      setHoldCountdownMs(null);
+      return;
+    }
+
+    const tick = () => {
+      const remaining = new Date(activeHold.expiresAt).getTime() - Date.now();
+      if (remaining <= 0) {
+        clearHoldState();
+        toast.error('Seat hold expired. Please select and hold a seat again.');
+        refreshSeatMap(true);
+      } else {
+        setHoldCountdownMs(remaining);
+      }
+    };
+
+    tick();
+    const intervalId = window.setInterval(tick, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [activeHold, refreshSeatMap]);
+
+  const handleSearch = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!originId) {
+      setSearchError('Please select an origin station.');
+      return;
+    }
+
+    if (!destinationId) {
+      setSearchError('Please select a destination station.');
+      return;
+    }
+
+    if (originId === destinationId) {
+      setSearchError('Origin and destination must be different.');
+      return;
+    }
+
+    if (!travelDate) {
+      setSearchError('Please select a travel date.');
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+    setSelectedSchedule(null);
+    setSeatAvailability(null);
+    setSeatLoadState('idle');
+    setSeatLoadError(null);
+    clearSeatSelection();
+    clearHoldState();
+
+    try {
+      const response = await searchSchedulesApi({
+        date: travelDate,
+        origin_id: originId,
+        destination_id: destinationId,
+      });
+
+      setSearchResults(response.schedules);
+    } catch (error) {
+      setSearchResults([]);
+      setSearchError(getApiErrorMessage(error, 'Could not search schedules.'));
+    } finally {
+      setIsSearching(false);
+    }
   };
+
+  const handleOriginChange = (nextOriginId: string) => {
+    setOriginId(nextOriginId);
+    clearSeatSelection();
+    clearHoldState();
+    setSeatAvailability(null);
+    setSeatLoadState('idle');
+    setSeatLoadError(null);
+
+    if (nextOriginId && destinationId === nextOriginId) {
+      setDestinationId('');
+    }
+  };
+
+  const handleDestinationChange = (nextDestinationId: string) => {
+    setDestinationId(nextDestinationId);
+    clearSeatSelection();
+    clearHoldState();
+    setSeatAvailability(null);
+    setSeatLoadState('idle');
+    setSeatLoadError(null);
+  };
+
+  const handleSelectSeat = (seatNumber: number) => {
+    if (isMapInteractionDisabled) {
+      return;
+    }
+
+    if (pendingSeat === seatNumber) {
+      setPendingSeat(null);
+      setHoldError(null);
+      return;
+    }
+
+    setPendingSeat(seatNumber);
+    setLostSeatNumber(null);
+    setHoldError(null);
+  };
+
+  const handleConfirmHold = async () => {
+    if (
+      !selectedSchedule ||
+      !selectedCoach ||
+      !pendingSeat ||
+      !originId ||
+      !destinationId
+    ) {
+      return;
+    }
+
+    setIsHoldingSeat(true);
+    setHoldError(null);
+
+    try {
+      await refreshSeatMap(true);
+
+      const coach = seatAvailability?.coaches.find((c) => c.coach_id === selectedCoach.coach_id);
+      const seatStillAvailable = coach?.seats.some(
+        (seat) => seat.seat_number === pendingSeat && seat.is_available,
+      );
+
+      if (!seatStillAvailable) {
+        setLostSeatNumber(pendingSeat);
+        setPendingSeat(null);
+        setHoldError('This seat was taken before the hold could start. Pick another seat.');
+        await refreshSeatMap(true);
+        return;
+      }
+
+      const holdResponse: HoldSeatResponse = await holdSeatApi({
+        schedule_id: selectedSchedule.schedule_id,
+        coach_id: selectedCoach.coach_id,
+        seat_number: pendingSeat,
+        origin_id: originId,
+        destination_id: destinationId,
+      });
+
+      const nextHold: ActiveHoldState = {
+        holdId: holdResponse.hold_id,
+        coachId: holdResponse.coach_id,
+        seatNumber: holdResponse.seat_number,
+        coachIdentifier: selectedCoach.identifier,
+        coachClass: selectedCoach.coach_class,
+        expiresAt: holdResponse.expires_at,
+      };
+
+      setActiveHold(nextHold);
+      setPaymentSession({
+        hold: nextHold,
+        schedule: selectedSchedule,
+        originId,
+        destinationId,
+      });
+      setPendingSeat(null);
+      setLostSeatNumber(null);
+      setHoldError(null);
+      await refreshSeatMap(true);
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Could not hold this seat.');
+      setHoldError(message);
+
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        setLostSeatNumber(pendingSeat);
+        setPendingSeat(null);
+        await refreshSeatMap(true);
+      }
+    } finally {
+      setIsHoldingSeat(false);
+    }
+  };
+
+  const openPaymentModal = () => {
+    if (!activeHold || !selectedSchedule) {
+      return;
+    }
+
+    setPaymentSession({
+      hold: activeHold,
+      schedule: selectedSchedule,
+      originId,
+      destinationId,
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const closePaymentModal = () => {
+    setIsPaymentModalOpen(false);
+    setPaymentSession(null);
+  };
+
+  const handlePaymentSuccess = (ticket: BookingTicket) => {
+    toast.success(`Booking confirmed — PNR ${ticket.booking_reference}`);
+    setActiveHold(null);
+    setHoldCountdownMs(null);
+    clearSeatSelection();
+    refreshSeatMap(true);
+  };
+
+  const originLabel = originId
+    ? stationById.get(originId)?.name ?? 'Selected origin'
+    : 'Select route';
+  const destinationLabel = destinationId
+    ? stationById.get(destinationId)?.name ?? 'Selected destination'
+    : 'Select route';
 
   return (
     <PassengerLayout>
+      {activeHold && holdCountdownMs !== null && (
+        <HoldTimerPopup
+          countdownMs={holdCountdownMs}
+          seatNumber={activeHold.seatNumber}
+          onPayNow={openPaymentModal}
+        />
+      )}
+
+      {isPaymentModalOpen && paymentSession && user && (
+        <PaymentModal
+          isOpen={isPaymentModalOpen}
+          holdId={paymentSession.hold.holdId}
+          quoteParams={{
+            schedule_id: paymentSession.schedule.schedule_id,
+            origin_station_id: paymentSession.originId,
+            destination_station_id: paymentSession.destinationId,
+            coach_class: paymentSession.hold.coachClass,
+          }}
+          journey={{
+            trainName: paymentSession.schedule.train.name,
+            trainNumber: paymentSession.schedule.train.train_number,
+            lineName: paymentSession.schedule.line.name,
+            originName: stationById.get(originId)?.name ?? 'Origin',
+            destinationName: stationById.get(destinationId)?.name ?? 'Destination',
+            seatNumber: paymentSession.hold.seatNumber,
+            coachIdentifier: paymentSession.hold.coachIdentifier,
+            departureTime: paymentSession.schedule.departure_time,
+          }}
+          passengerName={user.name || user.email.split('@')[0]}
+          passengerEmail={user.email}
+          onClose={closePaymentModal}
+          onSuccess={handlePaymentSuccess}
+        />
+      )}
+
       <div>
-        {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-xs text-slate-500 mb-6" aria-label="Breadcrumb">
-          <Link href="/dashboard" className="text-indigo-600 hover:underline font-medium">
+        <nav className="mb-6 flex items-center gap-2 text-xs text-slate-500" aria-label="Breadcrumb">
+          <Link href="/dashboard" className="font-medium text-indigo-600 hover:underline">
             Dashboard
           </Link>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <ChevronRight className="h-3.5 w-3.5" />
           <span className="text-slate-700">Book a Seat</span>
         </nav>
 
-        {/* Heading */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
+          <h1 className="mb-1 text-2xl font-bold tracking-tight text-slate-900">
             Reserve Train Seat
           </h1>
           <p className="text-sm text-slate-500">
-            Search live train schedules, select your travel route, pick coach seats, and generate instant e-tickets.
+            Search scheduled trains and pick a reserved coach seat for your journey segment.
           </p>
         </div>
 
-        {/* Search & Reservation Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column: Search Form */}
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm flex flex-col justify-between">
+        {bootstrapError && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-                  <Search className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">Search Trains</h2>
-                  <p className="text-xs text-slate-500">Select origin, destination & date</p>
-                </div>
-              </div>
+              <p className="font-semibold">Could not load booking data</p>
+              <p className="mt-1 text-rose-700">{bootstrapError}</p>
+            </div>
+          </div>
+        )}
 
-              <form onSubmit={handleSearch} className="flex flex-col gap-4">
-                {/* Origin */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Origin Station *</label>
-                  <div className="relative flex items-center">
-                    <MapPin className="absolute left-3.5 w-4 h-4 text-indigo-600 pointer-events-none" />
-                    <select
-                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
-                      value={origin}
-                      onChange={(e) => setOrigin(e.target.value)}
-                    >
-                      <option value="Colombo Fort">Colombo Fort (FOT)</option>
-                      <option value="Kandy">Kandy (KDA)</option>
-                      <option value="Galle">Galle (GLE)</option>
-                      <option value="Jaffna">Jaffna (JAF)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Destination */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Destination Station *</label>
-                  <div className="relative flex items-center">
-                    <MapPin className="absolute left-3.5 w-4 h-4 text-emerald-600 pointer-events-none" />
-                    <select
-                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                    >
-                      <option value="Badulla">Badulla (BDA)</option>
-                      <option value="Ella">Ella (ELL)</option>
-                      <option value="Nanu Oya">Nanu Oya (NOA)</option>
-                      <option value="Matara">Matara (MTR)</option>
-                      <option value="Kankesanthurai">Kankesanthurai (KKE)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Travel Date */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Travel Date *</label>
-                  <div className="relative flex items-center">
-                    <Calendar className="absolute left-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="date"
-                      className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
-                      value={travelDate}
-                      onChange={(e) => setTravelDate(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Coach Class */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700">Coach Class</label>
-                  <select
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-indigo-600 outline-none"
-                    value={coachClass}
-                    onChange={(e) => setCoachClass(e.target.value)}
-                  >
-                    <option value="1st Class Observation">1st Class Observation (A/C)</option>
-                    <option value="2nd Class Reserved">2nd Class Reserved (Reclining)</option>
-                    <option value="3rd Class Reserved">3rd Class Reserved</option>
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 cursor-pointer transition-all mt-2"
-                >
-                  Search Available Trains
-                </button>
-              </form>
+        <section className="mb-8 rounded-3xl border border-slate-200/90 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-600">
+              <Search className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Search Trains</h2>
+              <p className="text-xs text-slate-500">
+                Choose your origin, destination, and travel date to find trains with available seats
+              </p>
             </div>
           </div>
 
-          {/* Right Column: Available Trains & Seat Selector */}
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-7 shadow-sm lg:col-span-2 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 text-sky-600 flex items-center justify-center">
-                    <Train className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">Podi Menike Express (#1005)</h3>
-                    <p className="text-xs text-slate-500">
-                      {origin} &rarr; {destination} • Departure 05:55 AM
-                    </p>
-                  </div>
-                </div>
-
-                <span className="text-xs font-bold px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                  LKR 1,200 / Seat
-                </span>
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Origin Station</label>
+                <StationCombobox
+                  stations={sortedStations}
+                  value={originId}
+                  onChange={handleOriginChange}
+                  placeholder="Type to search origin"
+                  disabled={isBootstrapping}
+                  iconClassName="text-indigo-600"
+                />
               </div>
 
-              {/* Interactive Coach Seat Map */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Select Coach Seat (Coach 1005-A)
-                  </h4>
-                  <div className="flex items-center gap-4 text-xs">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-indigo-600 inline-block" /> Selected
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-slate-100 border border-slate-300 inline-block" /> Available
-                    </span>
-                  </div>
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Destination Station</label>
+                <StationCombobox
+                  stations={sortedStations}
+                  value={destinationId}
+                  onChange={handleDestinationChange}
+                  placeholder={originId ? 'Type to search destination' : 'Select origin first'}
+                  disabled={isBootstrapping || !originId}
+                  excludeStationId={originId}
+                  iconClassName="text-emerald-600"
+                />
+              </div>
 
-                {/* Seat Grid */}
-                <div className="grid grid-cols-6 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200 max-h-[220px] overflow-y-auto no-scrollbar">
-                  {Array.from({ length: 24 }, (_, i) => {
-                    const seatNum = i + 1;
-                    const isSelected = selectedSeat === seatNum;
-                    return (
-                      <button
-                        key={seatNum}
-                        type="button"
-                        onClick={() => setSelectedSeat(seatNum)}
-                        className={`p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-400'
-                        }`}
-                      >
-                        Seat {seatNum}
-                      </button>
-                    );
-                  })}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Travel Date</label>
+                <div className="relative flex items-center">
+                  <Calendar className="pointer-events-none absolute left-3.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white"
+                    value={travelDate}
+                    onChange={(event) => setTravelDate(event.target.value)}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Bottom Reservation Action */}
-            <div className="pt-5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4">
+            {searchError && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                {searchError}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={isSearching || isBootstrapping || Boolean(bootstrapError)}
+                className="w-full cursor-pointer rounded-xl bg-indigo-600 py-3 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[220px] sm:px-8"
+              >
+                {isSearching ? 'Searching...' : 'Search Available Trains'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          <div className="rounded-3xl border border-slate-200/90 bg-white p-7 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 text-sky-600">
+                <Train className="h-6 w-6" />
+              </div>
               <div>
-                <span className="text-xs text-slate-500">Selected Reservation:</span>
-                <div className="text-sm font-bold text-slate-900">
-                  Seat #{selectedSeat || 'None'} • {coachClass}
+                <h2 className="text-lg font-bold text-slate-900">Search Results</h2>
+                <p className="text-xs text-slate-500">
+                  Select a train to view reserved coach seats for your journey segment
+                </p>
+              </div>
+            </div>
+
+            <ScheduleResultsList
+              schedules={searchResults}
+              selectedScheduleId={selectedSchedule?.schedule_id ?? null}
+              onSelect={handleSelectSchedule}
+              emptyMessage={
+                searchError
+                  ? 'Search failed. Adjust filters and try again.'
+                  : 'Run a search to see matching scheduled trains.'
+              }
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="rounded-3xl border border-slate-200/90 bg-white p-7 shadow-sm">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Reserved Coach Seats</h2>
+                  {selectedSchedule ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {selectedSchedule.train.name} • {originLabel} → {destinationLabel}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Select a train from the search results to view seat availability.
+                    </p>
+                  )}
+                </div>
+
+                {seatMapVisible && (
+                  <button
+                    type="button"
+                    onClick={() => refreshSeatMap(false)}
+                    disabled={isRefreshingSeats || isHoldingSeat}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${isRefreshingSeats ? 'animate-spin' : ''}`}
+                    />
+                    Refresh map
+                  </button>
+                )}
+              </div>
+
+              <div className="mb-5 space-y-4 border-b border-slate-100 pb-5">
+
+                {holdError && (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                    {holdError}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <span className="text-xs text-slate-500">Selection status</span>
+                    <div className="text-sm font-bold text-slate-900">
+                      {activeHold
+                        ? `Holding seat ${activeHold.seatNumber}`
+                        : pendingSeat && selectedCoach
+                          ? `Seat ${pendingSeat} selected`
+                          : 'No seat selected'}
+                          
+                    </div>
+                    <span className="text-xs text-slate-500">Hold will start 10 minutes timer for payment and confirmation.</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleConfirmHold}
+                      disabled={
+                        !pendingSeat ||
+                        !selectedCoach ||
+                        isHoldingSeat ||
+                        isRefreshingSeats ||
+                        Boolean(activeHold)
+                      }
+                      className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
+                    >
+                      {isHoldingSeat ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Holding seat...
+                        </span>
+                      ) : (
+                        'Confirm & hold seat'
+                      )}
+                    </button>
+
+                    {activeHold && (
+                      <button
+                        type="button"
+                        onClick={openPaymentModal}
+                        className="rounded-xl border border-indigo-200 bg-white px-6 py-3 text-xs font-semibold text-indigo-700 shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50"
+                      >
+                        Pay now
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleReserveSeat}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 cursor-pointer transition-all disabled:opacity-60"
-                disabled={isReserving}
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{isReserving ? 'Confirming Seat...' : 'Confirm Seat Booking'}</span>
-              </button>
+              {!selectedSchedule && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                  Choose a scheduled train to load the seat map for your selected leg.
+                </div>
+              )}
+
+              {selectedSchedule && (!originId || !destinationId) && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-6 text-sm text-amber-900">
+                  Select both origin and destination before loading seats.
+                </div>
+              )}
+
+              {selectedSchedule && originId && destinationId && seatLoadState === 'loading' && (
+                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-600">
+                  <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+                  Loading seat map...
+                </div>
+              )}
+
+              {selectedSchedule && originId && destinationId && seatLoadState === 'error' && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-800">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold">Could not load seat availability</p>
+                      <p className="mt-1">{seatLoadError}</p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          loadSeatAvailability(selectedSchedule, originId, destinationId)
+                        }
+                        className="mt-3 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedSchedule && originId && destinationId && seatLoadState === 'success' && (
+                  <>
+                    <div className="mb-5">
+                      <CoachSelector
+                        coaches={seatAvailability?.coaches ?? []}
+                        selectedCoachId={selectedCoachId}
+                        onSelect={(coachId) => {
+                          setSelectedCoachId(coachId);
+                          setPendingSeat(null);
+                        }}
+                        disabled={isMapInteractionDisabled}
+                      />
+                    </div>
+
+                    <SeatMap
+                      coach={selectedCoach}
+                      pendingSeat={pendingSeat}
+                      activeHold={
+                        activeHold
+                          ? {
+                              seatNumber: activeHold.seatNumber,
+                              coachId: activeHold.coachId,
+                            }
+                          : null
+                      }
+                      lostSeatNumber={lostSeatNumber}
+                      isInteractionDisabled={isMapInteractionDisabled}
+                      onSelectSeat={handleSelectSeat}
+                    />
+                  </>
+                )}
             </div>
           </div>
         </div>

@@ -182,7 +182,7 @@ export const TrainManagement: React.FC = () => {
       // 1. Ensure coaches exist in DB with format "train_number - letter"
       const coachIds: string[] = [];
       for (const fc of formCoaches) {
-        const coachId = await ensureCoachApi(fc.identifier, fc.seatCount, fc.isReserved);
+        const coachId = await ensureCoachApi(fc);
         coachIds.push(coachId);
       }
 
@@ -204,7 +204,7 @@ export const TrainManagement: React.FC = () => {
       // 1. Ensure coaches exist in DB
       const coachIds: string[] = [];
       for (const fc of formCoaches) {
-        const coachId = await ensureCoachApi(fc.identifier, fc.seatCount, fc.isReserved);
+        const coachId = await ensureCoachApi(fc);
         coachIds.push(coachId);
       }
 

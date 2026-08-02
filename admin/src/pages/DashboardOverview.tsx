@@ -148,28 +148,31 @@ export const DashboardOverview: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-slate-50/70 border border-slate-200/80 rounded-2xl opacity-75 cursor-not-allowed">
-          <div>
-            <div className="flex items-start justify-between mb-6">
-              <div className="w-14 h-14 rounded-2xl bg-slate-200/60 text-slate-500 flex items-center justify-center">
-                <Settings className="w-7 h-7" />
+        <Link to="/dashboard/fare-model" className="no-underline flex h-full group">
+          <div className="w-full min-h-[330px] flex flex-col justify-between p-7 bg-white border border-slate-200/90 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-300 transition-all duration-200 hover:-translate-y-1">
+            <div>
+              <div className="flex items-start justify-between mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shadow-md shadow-amber-500/10">
+                  <Settings className="w-7 h-7" />
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Active
+                </span>
               </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-200/80 text-slate-600">
-                Offline
-              </span>
+              <h2 className="text-xl font-bold text-slate-900 mb-2.5 group-hover:text-amber-600 transition-colors">
+                Fare Model
+              </h2>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Configure flat booking fee, per-km rate, coach class multipliers, and peak/off-peak pricing rules.
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-slate-800 mb-2.5">
-              System Settings
-            </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              Configure system parameters, fare rate multipliers, CORS origins, and API credentials.
-            </p>
-          </div>
 
-          <div className="flex items-center justify-between pt-5 border-t border-slate-200/60 text-slate-400">
-            <span>Module Offline</span>
+            <div className="flex items-center justify-between pt-5 border-t border-slate-100 text-sm font-semibold text-amber-600 group-hover:text-amber-700">
+              <span>Open Module</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </div>
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );

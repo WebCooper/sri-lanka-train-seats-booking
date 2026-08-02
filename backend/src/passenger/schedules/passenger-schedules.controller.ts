@@ -14,16 +14,32 @@ export class PassengerScheduleController {
   ) {}
 
   /**
+   * GET /api/v1/schedules/upcoming
+   * Next scheduled trains after the current system time
+   */
+  @Get('upcoming')
+  @ApiOperation({
+    summary: 'Get upcoming scheduled trains',
+    description:
+      'Returns the next five train schedules whose departure time is after the current server time.',
+  })
+  @ApiResponse({ status: 200, description: 'Upcoming schedules returned.' })
+  async getUpcomingSchedules() {
+    return this.scheduleService.getUpcomingSchedules(5);
+  }
+
+  /**
    * GET /api/v1/schedules
    * Search for available train schedules
    */
   @Get()
   @ApiOperation({
     summary: 'Search for available train schedules',
-    description: 'Finds available train schedules for a given travel date, origin, and destination station.',
+    description:
+      'Finds train schedules for a travel date and journey segment that have at least one reserved seat available.',
   })
   @ApiResponse({ status: 200, description: 'Matching schedules returned.' })
-  @ApiResponse({ status: 400, description: 'Bad Request - Same origin & destination.' })
+  @ApiResponse({ status: 400, description: 'Bad Request - Invalid filters.' })
   @ApiResponse({ status: 404, description: 'Not Found - Station not found.' })
   async searchSchedules(@Query() query: SearchScheduleDto) {
     return this.scheduleService.searchSchedules(query);
@@ -36,10 +52,11 @@ export class PassengerScheduleController {
   @Get(':id/seats')
   @ApiOperation({
     summary: 'View seat availability for a schedule leg',
-    description: 'Returns real-time coach-by-coach seat availability map for the specified journey leg.',
+    description:
+      'Returns reserved-coach seat availability for the requested journey segment.',
   })
   @ApiResponse({ status: 200, description: 'Seat availability map returned.' })
-  @ApiResponse({ status: 404, description: 'Not Found - Schedule session not found.' })
+  @ApiResponse({ status: 404, description: 'Not Found - Schedule not found.' })
   async getSeatAvailability(
     @Param('id') id: string,
     @Query() query: QuerySeatsDto,

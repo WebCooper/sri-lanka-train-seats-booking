@@ -6,6 +6,7 @@ import { StationModule } from './station/station.module';
 import { LineModule } from './line/line.module';
 import { TrainModule } from './train/train.module';
 import { ScheduleModule } from './schedule/schedule.module';
+import { FareModule } from './fare/fare.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ScheduleModule } from './schedule/schedule.module';
     LineModule,
     TrainModule,
     ScheduleModule,
+    FareModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

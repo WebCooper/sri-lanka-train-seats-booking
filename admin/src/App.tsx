@@ -7,6 +7,7 @@ import { DashboardOverview } from './pages/DashboardOverview';
 import { AdminManagement } from './pages/AdminManagement';
 import { TrainManagement } from './pages/TrainManagement';
 import { ScheduleManagement } from './pages/ScheduleManagement';
+import { FareModelManagement } from './pages/FareModelManagement';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import './index.css';
@@ -96,6 +97,7 @@ export function App() {
             <Route path="admin-management" element={<AdminManagement />} />
             <Route path="train-management" element={<TrainManagement />} />
             <Route path="schedule-management" element={<ScheduleManagement />} />
+            <Route path="fare-model" element={<FareModelManagement />} />
           </Route>
 
           {/* Fallback Redirect */}

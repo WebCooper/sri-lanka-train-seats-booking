@@ -49,6 +49,19 @@ web/       Next.js public booking UI
 admin/     Vite admin (occupancy / revenue)
 ```
 
-## License
+how passenger book.
+login -> book-seat ui -> should be able to select origin and destination -> see available trains that have available seats -> click seat(start hold timer) -> show quote price -> proceed to demo payment -> payment success -> booking success for that specific trains coache's seat.
 
-Interview assignment — LSF SE Interview 2026.
+my approach for occupancy and segment modeling
+1. use half open intervals
+    By modeling a leg like Colombo Fort → Kandy as [originIndex, destinationIndex), a passenger getting off at Kandy (index 5) and another boarding at Kandy for Badulla (index 5 to 10) do not overlap.
+2. using the overlap identifiable logic as `existingStart < requestedEnd && requestedStart < existingEnd`
+3. allocations like hold and confirmed are tied to the schedule. this keeps passenger data seperate.
+
+for concurrency
+4. by using PostgreSQL GiST - Generalized Seach Tree's exclusion rule to identify overlapping segments on the same seat are rejected atomically at database level
+
+for pricing
+5. (flat booking fee + distance based charge(rs per/km)) * coach class charge * peak/offpeak charge
+
+

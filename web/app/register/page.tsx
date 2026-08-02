@@ -58,6 +58,9 @@ export default function RegisterPage() {
         name: fullName,
         email: email.trim(),
         password: password.trim(),
+        title,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         nic_number: nicNumber.trim() || undefined,
         mobile_number: mobileNumber.trim() || undefined,
       });

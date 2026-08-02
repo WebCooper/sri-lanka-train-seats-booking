@@ -5,20 +5,39 @@ import { PassengerScheduleController } from './schedules/passenger-schedules.con
 import { PassengerScheduleService } from './schedules/passenger-schedules.service';
 import { PassengerBookingController } from './bookings/passenger-bookings.controller';
 import { PassengerBookingService } from './bookings/passenger-bookings.service';
+import { PassengerLineController } from './lines/passenger-lines.controller';
+import { PassengerLineService } from './lines/passenger-lines.service';
+import { PassengerTrainController } from './trains/passenger-trains.controller';
+import { PassengerTrainService } from './trains/passenger-trains.service';
+import { PassengerProfileController } from './profile/passenger-profile.controller';
+import { PassengerProfileService } from './profile/passenger-profile.service';
+import { FareCalculationService } from '../common/fare-calculation.service';
+
+import { SegmentAllocationService } from '../common/segment-allocation.service';
 
 @Module({
   controllers: [
     PassengerStationController,
+    PassengerLineController,
+    PassengerTrainController,
     PassengerScheduleController,
     PassengerBookingController,
+    PassengerProfileController,
   ],
   providers: [
     PassengerStationService,
+    PassengerLineService,
+    PassengerTrainService,
     PassengerScheduleService,
     PassengerBookingService,
+    PassengerProfileService,
+    FareCalculationService,
+    SegmentAllocationService,
   ],
   exports: [
     PassengerStationService,
+    PassengerLineService,
+    PassengerTrainService,
     PassengerScheduleService,
     PassengerBookingService,
   ],

@@ -117,11 +117,40 @@ export const deleteLineApi = async (id: string): Promise<{ message: string; id: 
 };
 
 // Coach Models & APIs (/api/v1/admin/coaches)
+export const COACH_CLASSES = ['FIRST', 'SECOND', 'THIRD', 'OBSERVATION'] as const;
+export type CoachClass = (typeof COACH_CLASSES)[number];
+
+export const SEAT_CONFIGURATIONS = ['2+2', '2+3', '3+2', '1+1'] as const;
+export type SeatConfiguration = (typeof SEAT_CONFIGURATIONS)[number];
+
+export const COACH_CLASS_LABELS: Record<CoachClass, string> = {
+  FIRST: '1st Class (AC Saloon)',
+  SECOND: '2nd Class',
+  THIRD: '3rd Class',
+  OBSERVATION: 'Observation',
+};
+
+export function seatsPerRow(seatConfiguration: string): number {
+  return seatConfiguration
+    .split('+')
+    .reduce((sum, part) => sum + Number.parseInt(part, 10), 0);
+}
+
+export function isSeatCountCompatible(
+  seatCount: number,
+  seatConfiguration: string,
+): boolean {
+  const perRow = seatsPerRow(seatConfiguration);
+  return seatCount > 0 && perRow > 0 && seatCount % perRow === 0;
+}
+
 export interface CoachItem {
   id: string;
   identifier: string;
   seat_count: number;
   is_reserved: boolean;
+  coach_class: CoachClass;
+  seat_configuration: string;
   position?: number;
   attached_trains_count?: number;
 }
@@ -130,12 +159,16 @@ export interface CreateCoachPayload {
   identifier: string;
   seat_count: number;
   is_reserved?: boolean;
+  coach_class: CoachClass;
+  seat_configuration: string;
 }
 
 export interface UpdateCoachPayload {
   identifier?: string;
   seat_count?: number;
   is_reserved?: boolean;
+  coach_class?: CoachClass;
+  seat_configuration?: string;
 }
 
 export const fetchCoachesApi = async (params?: {
@@ -143,6 +176,7 @@ export const fetchCoachesApi = async (params?: {
   limit?: number;
   search?: string;
   is_reserved?: boolean;
+  coach_class?: CoachClass;
 }): Promise<PaginatedResponse<CoachItem>> => {
   const response = await axiosInstance.get<PaginatedResponse<CoachItem>>('/api/v1/admin/coaches', {
     params,
@@ -166,31 +200,36 @@ export const deleteCoachApi = async (id: string): Promise<{ message: string; id:
 };
 
 /**
- * Ensures a coach exists in DB with given identifier, seat count & reservation status.
+ * Ensures a coach exists in DB with given identifier and configuration.
  * If coach exists (409 conflict), updates its properties and returns coach ID.
  */
-export const ensureCoachApi = async (
-  identifier: string,
-  seatCount: number,
-  isReserved: boolean
-): Promise<string> => {
-  const cleanIdentifier = identifier.trim().toUpperCase();
+export const ensureCoachApi = async (coach: {
+  identifier: string;
+  seatCount: number;
+  isReserved: boolean;
+  coachClass: CoachClass;
+  seatConfiguration: string;
+}): Promise<string> => {
+  const cleanIdentifier = coach.identifier.trim().toUpperCase();
   try {
     const created = await createCoachApi({
       identifier: cleanIdentifier,
-      seat_count: seatCount,
-      is_reserved: isReserved,
+      seat_count: coach.seatCount,
+      is_reserved: coach.isReserved,
+      coach_class: coach.coachClass,
+      seat_configuration: coach.seatConfiguration,
     });
     return created.id;
   } catch (err: unknown) {
     if (axios.isAxiosError(err) && err.response?.status === 409) {
-      // Find existing coach by searching exact identifier
       const searchRes = await fetchCoachesApi({ search: cleanIdentifier, limit: 10 });
       const matched = searchRes.data.find((c) => c.identifier.toUpperCase() === cleanIdentifier);
       if (matched) {
         await updateCoachApi(matched.id, {
-          seat_count: seatCount,
-          is_reserved: isReserved,
+          seat_count: coach.seatCount,
+          is_reserved: coach.isReserved,
+          coach_class: coach.coachClass,
+          seat_configuration: coach.seatConfiguration,
         });
         return matched.id;
       }
@@ -269,6 +308,8 @@ export interface FormCoachState {
   identifier: string;
   seatCount: number;
   isReserved: boolean;
+  coachClass: CoachClass;
+  seatConfiguration: SeatConfiguration;
   position: number;
 }
 
@@ -276,11 +317,11 @@ export const generateDefaultCoaches = (
   trainNumber = '1005',
   totalCoaches = 8,
   reservableCount = 3,
-  seatsPerCoach = 54
+  seatsPerCoach = 40,
 ): FormCoachState[] => {
   const cleanNum = trainNumber.trim() || '1005';
   return Array.from({ length: totalCoaches }, (_, index) => {
-    const letter = String.fromCharCode(65 + index); // A, B, C...
+    const letter = String.fromCharCode(65 + index);
     const position = index + 1;
     const isReserved = position <= reservableCount;
     return {
@@ -288,6 +329,8 @@ export const generateDefaultCoaches = (
       position,
       seatCount: seatsPerCoach,
       isReserved,
+      coachClass: isReserved ? 'FIRST' : 'THIRD',
+      seatConfiguration: isReserved ? '2+2' : '2+3',
     };
   });
 };

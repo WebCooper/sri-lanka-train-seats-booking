@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const baseURL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:5000';
 
 export const axiosInstance = axios.create({
   baseURL,
@@ -60,7 +63,9 @@ export const getApiErrorMessage = (err: unknown, defaultFallback = 'An unexpecte
       return (typeof data === 'object' && data?.message) ? data.message : 'Resource not found.';
     }
     if (status === 409) {
-      return (typeof data === 'object' && data?.message) ? data.message : 'An account with this email already exists.';
+      return (typeof data === 'object' && data?.message)
+        ? data.message
+        : 'This seat or segment is no longer available.';
     }
 
     if (data) {

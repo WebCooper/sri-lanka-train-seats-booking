@@ -1,13 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsUUID } from 'class-validator';
+import { IsDateString, IsUUID } from 'class-validator';
 
 export class SearchScheduleDto {
   @ApiProperty({
     example: '2026-08-05',
-    description: 'Travel date in YYYY-MM-DD format or ISO date string',
+    description: 'Travel date (YYYY-MM-DD)',
   })
   @IsDateString({}, { message: 'date must be a valid date string (YYYY-MM-DD)' })
-  @IsNotEmpty({ message: 'date is required' })
   date: string;
 
   @ApiProperty({
@@ -15,7 +14,6 @@ export class SearchScheduleDto {
     description: 'Origin station UUID',
   })
   @IsUUID('all', { message: 'origin_id must be a valid UUID' })
-  @IsNotEmpty({ message: 'origin_id is required' })
   origin_id: string;
 
   @ApiProperty({
@@ -23,6 +21,5 @@ export class SearchScheduleDto {
     description: 'Destination station UUID',
   })
   @IsUUID('all', { message: 'destination_id must be a valid UUID' })
-  @IsNotEmpty({ message: 'destination_id is required' })
   destination_id: string;
 }

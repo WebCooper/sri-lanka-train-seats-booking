@@ -18,7 +18,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
         <PassengerAuthProvider>
           <Toaster
-            position="bottom-left"
+            position="bottom-right"
             toastOptions={{
               duration: 4000,
               style: {

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import { UpcomingTrainsSection } from '../components/UpcomingTrainsSection';
 import { Train, Ticket, ShieldCheck, Clock, MapPin, ArrowRight, Search, CheckCircle2 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -88,6 +89,8 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <UpcomingTrainsSection />
 
       {/* Popular Scenic Routes */}
       <section className="py-20 px-6 max-w-7xl mx-auto w-full">
