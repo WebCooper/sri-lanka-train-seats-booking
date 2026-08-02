@@ -30,8 +30,7 @@ model User {
   updatedAt      DateTime   @updatedAt
   sessions       Session[]
   accounts       Account[]
-  seatHolds      SeatHold[]
-  bookings       Booking[]
+  allocations    SeatSegmentAllocation[]
 
   @@unique([email])
   @@map("user")
@@ -94,13 +93,11 @@ model Station {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  startLines          Line[]        @relation("StartStation")
-  endLines            Line[]        @relation("EndStation")
-  lineIntermediaries  LineStation[]
-  holdOrigins         SeatHold[]    @relation("HoldOrigin")
-  holdDestinations    SeatHold[]    @relation("HoldDestination")
-  bookingOrigins      Booking[]     @relation("BookingOrigin")
-  bookingDestinations Booking[]     @relation("BookingDestination")
+  startLines           Line[]                  @relation("StartStation")
+  endLines             Line[]                  @relation("EndStation")
+  lineIntermediaries     LineStation[]
+  allocationOrigins      SeatSegmentAllocation[] @relation("AllocationOrigin")
+  allocationDestinations SeatSegmentAllocation[] @relation("AllocationDestination")
 
   @@map("station")
 }
@@ -146,8 +143,7 @@ model Coach {
   updatedAt         DateTime @updatedAt
 
   trainCoaches TrainCoach[]
-  seatHolds    SeatHold[]
-  bookings     Booking[]
+  allocations  SeatSegmentAllocation[]
 
   @@map("coach")
 }
@@ -190,31 +186,39 @@ model Schedule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  seatHolds SeatHold[]
-  bookings  Booking[]
+  allocations SeatSegmentAllocation[]
 
   @@map("schedule")
 }
 
-model SeatHold {
-  id                   String   @id @default(uuid())
-  scheduleId           String   @map("schedule_id")
-  schedule             Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  coachId              String   @map("coach_id")
-  coach                Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  seatNumber           Int      @map("seat_number")
-  originStationId      String   @map("origin_station_id")
-  originStation        Station  @relation("HoldOrigin", fields: [originStationId], references: [id])
-  destinationStationId String   @map("destination_station_id")
-  destinationStation   Station  @relation("HoldDestination", fields: [destinationStationId], references: [id])
-  userId               String?  @map("user_id")
-  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  status               String   @default("ACTIVE")
-  expiresAt            DateTime @map("expires_at")
-  createdAt            DateTime @default(now())
+model SeatSegmentAllocation {
+  id                   String    @id @default(uuid())
+  scheduleId           String    @map("schedule_id")
+  schedule             Schedule  @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  coachId              String    @map("coach_id")
+  coach                Coach     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  seatNumber           Int       @map("seat_number")
+  originStationId      String    @map("origin_station_id")
+  originStation        Station   @relation("AllocationOrigin", fields: [originStationId], references: [id])
+  destinationStationId String    @map("destination_station_id")
+  destinationStation   Station   @relation("AllocationDestination", fields: [destinationStationId], references: [id])
+  originPosition       Int       @map("origin_position")
+  destinationPosition  Int       @map("destination_position")
+  status               String    @default("ACTIVE")
+  expiresAt            DateTime? @map("expires_at")
+  bookingReference     String?   @unique @map("booking_reference")
+  passengerName        String?   @map("passenger_name")
+  passengerEmail       String?   @map("passenger_email")
+  passengerPhone       String?   @map("passenger_phone")
+  userId               String?   @map("user_id")
+  user                 User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fareAmount           Float     @default(0) @map("fare_amount")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   @@index([scheduleId, coachId, seatNumber])
-  @@map("seat_hold")
+  @@index([status])
+  @@map("seat_segment_allocation")
 }
 
 model FareSettings {
@@ -247,30 +251,4 @@ model PeakHourRule {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("peak_hour_rule")
-}
-
-model Booking {
-  id                   String   @id @default(uuid())
-  bookingReference     String   @unique @map("booking_reference")
-  scheduleId           String   @map("schedule_id")
-  schedule             Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  coachId              String   @map("coach_id")
-  coach                Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  seatNumber           Int      @map("seat_number")
-  originStationId      String   @map("origin_station_id")
-  originStation        Station  @relation("BookingOrigin", fields: [originStationId], references: [id])
-  destinationStationId String   @map("destination_station_id")
-  destinationStation   Station  @relation("BookingDestination", fields: [destinationStationId], references: [id])
-  passengerName        String   @map("passenger_name")
-  passengerEmail       String   @map("passenger_email")
-  passengerPhone       String?  @map("passenger_phone")
-  userId               String?  @map("user_id")
-  user                 User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  fareAmount           Float    @default(0) @map("fare_amount")
-  status               String   @default("CONFIRMED")
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  @@index([scheduleId, coachId, seatNumber])
-  @@map("booking")
 }

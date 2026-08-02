@@ -10,10 +10,9 @@ import {
   buildStationSequence,
   findValidLineIds,
   getSegmentPositions,
-  isSeatOccupiedForSegment,
   LineWithStations,
-  SegmentOccupancy,
 } from '../../common/line-segment.util';
+import { SegmentAllocationService } from '../../common/segment-allocation.service';
 
 type CoachRecord = {
   id: string;
@@ -30,6 +29,8 @@ type ScheduleWithRelations = Awaited<
 
 @Injectable()
 export class PassengerScheduleService {
+  constructor(private readonly segmentAllocation: SegmentAllocationService) {}
+
   private readonly scheduleInclude = {
     line: {
       include: {
@@ -245,7 +246,7 @@ export class PassengerScheduleService {
       );
     }
 
-    const occupancies = await this.fetchSegmentOccupancies(scheduleId);
+    const occupancies = await this.segmentAllocation.fetchBlockingAllocations(scheduleId);
     const reservedTrainCoaches = schedule.train.coaches.filter(
       (tc) => tc.coach.isReserved && tc.coach.seatCount > 0,
     );
@@ -259,16 +260,12 @@ export class PassengerScheduleService {
       }> = [];
 
       for (let seatNo = 1; seatNo <= coach.seatCount; seatNo++) {
-        const isOccupied = occupancies.some(
-          (occ) =>
-            occ.coachId === coach.id &&
-            occ.seatNumber === seatNo &&
-            isSeatOccupiedForSegment(
-              sequence,
-              querySegment.originPos,
-              querySegment.destPos,
-              occ,
-            ),
+        const isOccupied = this.segmentAllocation.hasSeatSegmentConflict(
+          coach.id,
+          seatNo,
+          querySegment.originPos,
+          querySegment.destPos,
+          occupancies,
         );
 
         seats.push({
@@ -367,42 +364,6 @@ export class PassengerScheduleService {
       .filter((coach) => coach.isReserved && coach.seatCount > 0);
   }
 
-  private async fetchSegmentOccupancies(
-    scheduleId: string,
-  ): Promise<SegmentOccupancy[]> {
-    const now = new Date();
-
-    const [activeHolds, confirmedBookings] = await Promise.all([
-      prisma.seatHold.findMany({
-        where: {
-          scheduleId,
-          status: 'ACTIVE',
-          expiresAt: { gt: now },
-        },
-        select: {
-          coachId: true,
-          seatNumber: true,
-          originStationId: true,
-          destinationStationId: true,
-        },
-      }),
-      prisma.booking.findMany({
-        where: {
-          scheduleId,
-          status: 'CONFIRMED',
-        },
-        select: {
-          coachId: true,
-          seatNumber: true,
-          originStationId: true,
-          destinationStationId: true,
-        },
-      }),
-    ]);
-
-    return [...activeHolds, ...confirmedBookings];
-  }
-
   private async countAvailableReservedSeats(
     scheduleId: string,
     line: LineWithStations,
@@ -421,21 +382,17 @@ export class PassengerScheduleService {
       return 0;
     }
 
-    const occupancies = await this.fetchSegmentOccupancies(scheduleId);
+    const occupancies = await this.segmentAllocation.fetchBlockingAllocations(scheduleId);
     let availableCount = 0;
 
     for (const coach of reservedCoaches) {
       for (let seatNo = 1; seatNo <= coach.seatCount; seatNo++) {
-        const isOccupied = occupancies.some(
-          (occ) =>
-            occ.coachId === coach.id &&
-            occ.seatNumber === seatNo &&
-            isSeatOccupiedForSegment(
-              sequence,
-              querySegment.originPos,
-              querySegment.destPos,
-              occ,
-            ),
+        const isOccupied = this.segmentAllocation.hasSeatSegmentConflict(
+          coach.id,
+          seatNo,
+          querySegment.originPos,
+          querySegment.destPos,
+          occupancies,
         );
 
         if (!isOccupied) {

@@ -11,6 +11,8 @@ import { PassengerTrainController } from './trains/passenger-trains.controller';
 import { PassengerTrainService } from './trains/passenger-trains.service';
 import { FareCalculationService } from '../common/fare-calculation.service';
 
+import { SegmentAllocationService } from '../common/segment-allocation.service';
+
 @Module({
   controllers: [
     PassengerStationController,
@@ -26,6 +28,7 @@ import { FareCalculationService } from '../common/fare-calculation.service';
     PassengerScheduleService,
     PassengerBookingService,
     FareCalculationService,
+    SegmentAllocationService,
   ],
   exports: [
     PassengerStationService,

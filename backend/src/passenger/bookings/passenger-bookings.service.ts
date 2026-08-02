@@ -10,10 +10,58 @@ import { HoldSeatDto } from '../dto/hold-seat.dto';
 import { ConfirmBookingDto } from '../dto/confirm-booking.dto';
 import { FareQuoteRequestDto } from '../dto/fare-quote.dto';
 import { FareCalculationService } from '../../common/fare-calculation.service';
+import {
+  ALLOCATION_STATUS,
+  SegmentAllocationService,
+} from '../../common/segment-allocation.service';
+import type { LineWithStations } from '../../common/line-segment.util';
 
 @Injectable()
 export class PassengerBookingService {
-  constructor(private readonly fareCalculation: FareCalculationService) {}
+  constructor(
+    private readonly fareCalculation: FareCalculationService,
+    private readonly segmentAllocation: SegmentAllocationService,
+  ) {}
+
+  private buildLineWithStations(
+    line: {
+      id: string;
+      startStationId: string;
+      endStationId: string;
+      stations: Array<{ stationId: string; position: number }>;
+    },
+  ): LineWithStations {
+    return {
+      id: line.id,
+      startStationId: line.startStationId,
+      endStationId: line.endStationId,
+      stations: line.stations.map((station) => ({
+        stationId: station.stationId,
+        position: station.position,
+      })),
+    };
+  }
+
+  private allocationInclude() {
+    return {
+      schedule: {
+        include: {
+          line: {
+            include: {
+              stations: true,
+              startStation: true,
+              endStation: true,
+            },
+          },
+          train: true,
+        },
+      },
+      coach: true,
+      originStation: true,
+      destinationStation: true,
+    };
+  }
+
   /**
    * Temporarily lock a seat for 10 minutes to prevent race conditions during checkout
    */
@@ -24,10 +72,18 @@ export class PassengerBookingService {
       throw new BadRequestException('Origin and destination stations cannot be the same');
     }
 
+    await this.segmentAllocation.expireStaleHolds(schedule_id);
+
     const [schedule, coach, originStation, destinationStation] = await Promise.all([
       prisma.schedule.findUnique({
         where: { id: schedule_id },
-        include: { line: true },
+        include: {
+          line: {
+            include: {
+              stations: true,
+            },
+          },
+        },
       }),
       prisma.coach.findUnique({ where: { id: coach_id } }),
       prisma.station.findUnique({ where: { id: origin_id } }),
@@ -53,50 +109,45 @@ export class PassengerBookingService {
       );
     }
 
-    const now = new Date();
+    const line = this.buildLineWithStations(schedule.line);
+    const segmentPositions = this.segmentAllocation.resolveSegmentPositions(
+      line,
+      origin_id,
+      destination_id,
+    );
 
-    // Check if seat is currently held (active hold where expiresAt > now) or confirmed booked
-    const [existingHold, existingBooking] = await Promise.all([
-      prisma.seatHold.findFirst({
-        where: {
-          scheduleId: schedule_id,
-          coachId: coach_id,
-          seatNumber: seat_number,
-          status: 'ACTIVE',
-          expiresAt: { gt: now },
-        },
-      }),
-      prisma.booking.findFirst({
-        where: {
-          scheduleId: schedule_id,
-          coachId: coach_id,
-          seatNumber: seat_number,
-          status: 'CONFIRMED',
-        },
-      }),
-    ]);
-
-    if (existingHold || existingBooking) {
-      throw new ConflictException(
-        `Seat ${seat_number} in coach "${coach.identifier}" is currently locked or booked by another passenger`,
+    if (!segmentPositions) {
+      throw new BadRequestException(
+        'Origin must come before destination on this train line',
       );
     }
 
-    // Set hold expiry for 10 minutes
-    const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    const hold = await prisma.seatHold.create({
-      data: {
-        scheduleId: schedule_id,
-        coachId: coach_id,
-        seatNumber: seat_number,
-        originStationId: origin_id,
-        destinationStationId: destination_id,
-        userId: userId ?? null,
-        status: 'ACTIVE',
-        expiresAt,
-      },
-    });
+    let hold;
+    try {
+      hold = await prisma.seatSegmentAllocation.create({
+        data: {
+          scheduleId: schedule_id,
+          coachId: coach_id,
+          seatNumber: seat_number,
+          originStationId: origin_id,
+          destinationStationId: destination_id,
+          originPosition: segmentPositions.originPos,
+          destinationPosition: segmentPositions.destPos,
+          status: ALLOCATION_STATUS.ACTIVE,
+          expiresAt,
+          userId: userId ?? null,
+        },
+      });
+    } catch (error) {
+      if (this.segmentAllocation.isExclusionConstraintViolation(error)) {
+        throw new ConflictException(
+          `Seat ${seat_number} in coach "${coach.identifier}" overlaps an existing hold or booking on this schedule segment`,
+        );
+      }
+      throw error;
+    }
 
     const fareQuote = await this.fareCalculation.calculateSegmentFareQuote(
       schedule.lineId,
@@ -112,8 +163,12 @@ export class PassengerBookingService {
       coach_id: hold.coachId,
       seat_number: hold.seatNumber,
       origin_station: { id: originStation.id, name: originStation.name, code: originStation.code },
-      destination_station: { id: destinationStation.id, name: destinationStation.name, code: destinationStation.code },
-      expires_at: hold.expiresAt.toISOString(),
+      destination_station: {
+        id: destinationStation.id,
+        name: destinationStation.name,
+        code: destinationStation.code,
+      },
+      expires_at: hold.expiresAt?.toISOString(),
       fare_quote: {
         ...fareQuote,
         currency: 'LKR',
@@ -128,19 +183,9 @@ export class PassengerBookingService {
   async confirmBooking(dto: ConfirmBookingDto, userId?: string) {
     const { hold_id, passenger_details } = dto;
 
-    const hold = await prisma.seatHold.findUnique({
+    const hold = await prisma.seatSegmentAllocation.findUnique({
       where: { id: hold_id },
-      include: {
-        schedule: {
-          include: {
-            line: { include: { startStation: true, endStation: true } },
-            train: true,
-          },
-        },
-        coach: true,
-        originStation: true,
-        destinationStation: true,
-      },
+      include: this.allocationInclude(),
     });
 
     if (!hold) {
@@ -148,7 +193,11 @@ export class PassengerBookingService {
     }
 
     const now = new Date();
-    if (hold.status !== 'ACTIVE' || hold.expiresAt <= now) {
+    if (
+      hold.status !== ALLOCATION_STATUS.ACTIVE ||
+      !hold.expiresAt ||
+      hold.expiresAt <= now
+    ) {
       throw new BadRequestException(
         'Seat hold has expired or is invalid. Please select and hold your seat again.',
       );
@@ -163,70 +212,70 @@ export class PassengerBookingService {
     );
     const fareAmount = fareQuote.fare_amount;
 
-    // Generate unique booking reference (PNR-XXXXXX)
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
     const pnr = `PNR-${randomSuffix}`;
 
-    const booking = await prisma.$transaction(async (tx) => {
-      await tx.seatHold.update({
-        where: { id: hold_id },
-        data: { status: 'CONFIRMED' },
-      });
-
-      return tx.booking.create({
-        data: {
-          bookingReference: pnr,
-          scheduleId: hold.scheduleId,
-          coachId: hold.coachId,
-          seatNumber: hold.seatNumber,
-          originStationId: hold.originStationId,
-          destinationStationId: hold.destinationStationId,
-          passengerName: passenger_details.name,
-          passengerEmail: passenger_details.email.toLowerCase(),
-          passengerPhone: passenger_details.phone ?? null,
-          userId: userId ?? hold.userId ?? null,
-          fareAmount,
-          status: 'CONFIRMED',
-        },
-        include: {
-          schedule: {
-            include: {
-              line: { include: { startStation: true, endStation: true } },
-              train: true,
-            },
+    try {
+      const booking = await prisma.$transaction(async (tx) => {
+        await tx.seatSegmentAllocation.updateMany({
+          where: {
+            status: ALLOCATION_STATUS.ACTIVE,
+            expiresAt: { lte: now },
           },
-          coach: true,
-          originStation: true,
-          destinationStation: true,
-        },
-      });
-    });
+          data: { status: ALLOCATION_STATUS.EXPIRED },
+        });
 
-    return this.formatTicketResponse(booking);
+        const updated = await tx.seatSegmentAllocation.updateMany({
+          where: {
+            id: hold_id,
+            status: ALLOCATION_STATUS.ACTIVE,
+            expiresAt: { gt: now },
+          },
+          data: {
+            status: ALLOCATION_STATUS.CONFIRMED,
+            expiresAt: null,
+            bookingReference: pnr,
+            passengerName: passenger_details.name,
+            passengerEmail: passenger_details.email.toLowerCase(),
+            passengerPhone: passenger_details.phone ?? null,
+            userId: userId ?? hold.userId ?? null,
+            fareAmount,
+          },
+        });
+
+        if (updated.count === 0) {
+          throw new BadRequestException(
+            'Seat hold has expired or is invalid. Please select and hold your seat again.',
+          );
+        }
+
+        return tx.seatSegmentAllocation.findUniqueOrThrow({
+          where: { id: hold_id },
+          include: this.allocationInclude(),
+        });
+      });
+
+      return this.formatTicketResponse(booking);
+    } catch (error) {
+      if (this.segmentAllocation.isExclusionConstraintViolation(error)) {
+        throw new ConflictException(
+          `Seat ${hold.seatNumber} in coach "${hold.coach.identifier}" overlaps another active hold or confirmed booking on this schedule segment`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**
-   * Retrieve confirmed ticket details by booking ID or PNR reference
+   * Retrieve confirmed ticket details by allocation ID or PNR reference
    */
   async getBookingDetails(idOrRef: string) {
-    const booking = await prisma.booking.findFirst({
+    const booking = await prisma.seatSegmentAllocation.findFirst({
       where: {
-        OR: [
-          { id: idOrRef },
-          { bookingReference: idOrRef },
-        ],
+        status: ALLOCATION_STATUS.CONFIRMED,
+        OR: [{ id: idOrRef }, { bookingReference: idOrRef }],
       },
-      include: {
-        schedule: {
-          include: {
-            line: { include: { startStation: true, endStation: true } },
-            train: true,
-          },
-        },
-        coach: true,
-        originStation: true,
-        destinationStation: true,
-      },
+      include: this.allocationInclude(),
     });
 
     if (!booking) {
@@ -266,46 +315,65 @@ export class PassengerBookingService {
     };
   }
 
-  /**
-   * Format Prisma Booking object into clean ticket response payload
-   */
-  private formatTicketResponse(b: any) {
+  private formatTicketResponse(allocation: {
+    id: string;
+    bookingReference: string | null;
+    status: string;
+    fareAmount: number;
+    passengerName: string | null;
+    passengerEmail: string | null;
+    passengerPhone: string | null;
+    scheduleId: string;
+    coachId: string;
+    seatNumber: number;
+    createdAt: Date;
+    updatedAt: Date;
+    schedule: {
+      departureTime: Date;
+      arrivalTime: Date;
+      train: { name: string; trainNumber: string };
+      line: { name: string };
+    };
+    coach: { identifier: string; isReserved: boolean };
+    originStation: { id: string; name: string; code: string };
+    destinationStation: { id: string; name: string; code: string };
+  }) {
     return {
-      booking_id: b.id,
-      booking_reference: b.bookingReference,
-      status: b.status,
-      fare_amount: b.fareAmount,
+      booking_id: allocation.id,
+      booking_reference: allocation.bookingReference,
+      status: allocation.status,
+      fare_amount: allocation.fareAmount,
       passenger: {
-        name: b.passengerName,
-        email: b.passengerEmail,
-        phone: b.passengerPhone,
+        name: allocation.passengerName,
+        email: allocation.passengerEmail,
+        phone: allocation.passengerPhone,
       },
       journey_details: {
-        schedule_id: b.scheduleId,
-        train_name: b.schedule.train.name,
-        train_number: b.schedule.train.trainNumber,
-        line_name: b.schedule.line.name,
+        schedule_id: allocation.scheduleId,
+        train_name: allocation.schedule.train.name,
+        train_number: allocation.schedule.train.trainNumber,
+        line_name: allocation.schedule.line.name,
         origin_station: {
-          id: b.originStation.id,
-          name: b.originStation.name,
-          code: b.originStation.code,
+          id: allocation.originStation.id,
+          name: allocation.originStation.name,
+          code: allocation.originStation.code,
         },
         destination_station: {
-          id: b.destinationStation.id,
-          name: b.destinationStation.name,
-          code: b.destinationStation.code,
+          id: allocation.destinationStation.id,
+          name: allocation.destinationStation.name,
+          code: allocation.destinationStation.code,
         },
-        departure_time: b.schedule.departureTime.toISOString(),
-        arrival_time: b.schedule.arrivalTime.toISOString(),
+        departure_time: allocation.schedule.departureTime.toISOString(),
+        arrival_time: allocation.schedule.arrivalTime.toISOString(),
       },
       seat_details: {
-        coach_id: b.coachId,
-        coach_identifier: b.coach.identifier,
-        seat_number: b.seatNumber,
-        is_reserved_class: b.coach.isReserved,
+        coach_id: allocation.coachId,
+        coach_identifier: allocation.coach.identifier,
+        seat_number: allocation.seatNumber,
+        is_reserved_class: allocation.coach.isReserved,
       },
-      createdAt: b.createdAt,
-      updatedAt: b.updatedAt,
+      createdAt: allocation.createdAt,
+      updatedAt: allocation.updatedAt,
     };
   }
 }

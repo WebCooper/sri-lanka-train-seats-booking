@@ -52,7 +52,7 @@ admin/     Vite admin (occupancy / revenue)
 how passenger book.
 login -> book-seat ui -> should be able to select origin and destination -> see available trains that have available seats -> click seat(start hold timer) -> show quote price -> proceed to demo payment -> payment success -> booking success for that specific trains coache's seat.
 
-my appraoch for occupancy and segment modeling
+my approach for occupancy and segment modeling
 1. use half open intervals
     By modeling a leg like Colombo Fort → Kandy as [originIndex, destinationIndex), a passenger getting off at Kandy (index 5) and another boarding at Kandy for Badulla (index 5 to 10) do not overlap.
 2. using the overlap identifiable logic as `existingStart < requestedEnd && requestedStart < existingEnd`
