@@ -5,9 +5,18 @@ import type {
   RailwayLine, 
   FormCoachState,
   CreateTrainPayload,
-  UpdateTrainPayload 
+  UpdateTrainPayload,
+  CoachClass,
+  SeatConfiguration,
 } from '../api/trainManagementApi';
-import { generateDefaultCoaches } from '../api/trainManagementApi';
+import {
+  generateDefaultCoaches,
+  COACH_CLASSES,
+  COACH_CLASS_LABELS,
+  SEAT_CONFIGURATIONS,
+  isSeatCountCompatible,
+  seatsPerRow,
+} from '../api/trainManagementApi';
 import toast from 'react-hot-toast';
 
 interface TrainConfigModalProps {
@@ -46,19 +55,21 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
           id: c.id,
           identifier: c.identifier || `${initialData.train_number}-${String.fromCharCode(65 + idx)}`,
           position: idx + 1,
-          seatCount: c.seat_count ?? 54,
+          seatCount: c.seat_count ?? 40,
           isReserved: c.is_reserved ?? false,
+          coachClass: c.coach_class ?? (c.is_reserved ? 'FIRST' : 'THIRD'),
+          seatConfiguration: (c.seat_configuration as SeatConfiguration) ?? '2+2',
         }));
         setCoaches(loadedCoaches);
       } else {
-        setCoaches(generateDefaultCoaches(initialData.train_number || '1005', 8, 3, 54));
+        setCoaches(generateDefaultCoaches(initialData.train_number || '1005', 8, 3, 40));
       }
     } else {
       const defaultNumber = '1005';
       setTrainName('');
       setTrainNumber(defaultNumber);
       setLineId(lines[0]?.id || '');
-      setCoaches(generateDefaultCoaches(defaultNumber, 8, 3, 54));
+      setCoaches(generateDefaultCoaches(defaultNumber, 8, 3, 40));
     }
   }, [initialData, isOpen, lines]);
 
@@ -78,8 +89,8 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
 
   const handleResetToDefaultPreset = () => {
     const cleanNum = trainNumber.trim() || '1005';
-    setCoaches(generateDefaultCoaches(cleanNum, 8, 3, 54));
-    toast.success('Reset layout to default preset (8 Coaches: 3 Reservable, 54 Seats).');
+    setCoaches(generateDefaultCoaches(cleanNum, 8, 3, 40));
+    toast.success('Reset layout to default preset (8 coaches: 3 reservable 1st class, 40 seats each).');
   };
 
   const handleAddCoach = () => {
@@ -91,8 +102,10 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
     const newCoach: FormCoachState = {
       identifier: `${cleanNum}-${letter}`,
       position: newPos,
-      seatCount: 54,
+      seatCount: 40,
       isReserved,
+      coachClass: isReserved ? 'FIRST' : 'THIRD',
+      seatConfiguration: isReserved ? '2+2' : '2+3',
     };
     setCoaches([...coaches, newCoach]);
   };
@@ -136,6 +149,15 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
     if (!trainNumber.trim()) {
       toast.error('Train number is required.');
       return;
+    }
+
+    for (const coach of coaches) {
+      if (!isSeatCountCompatible(coach.seatCount, coach.seatConfiguration)) {
+        toast.error(
+          `Coach ${coach.identifier}: seat count must be divisible by ${seatsPerRow(coach.seatConfiguration)} for a ${coach.seatConfiguration} layout.`,
+        );
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -295,8 +317,14 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
             </div>
 
             {/* Coach List Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto p-1 no-scrollbar">
-              {coaches.map((coach, index) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto p-1 no-scrollbar">
+              {coaches.map((coach, index) => {
+                const layoutValid = isSeatCountCompatible(
+                  coach.seatCount,
+                  coach.seatConfiguration,
+                );
+
+                return (
                 <div
                   key={index}
                   className={`p-3.5 rounded-xl border transition-all ${
@@ -323,15 +351,56 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                     </button>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold text-slate-600">Class</label>
+                      <select
+                        className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-600"
+                        value={coach.coachClass}
+                        onChange={(e) =>
+                          handleCoachChange(index, 'coachClass', e.target.value as CoachClass)
+                        }
+                      >
+                        {COACH_CLASSES.map((coachClass) => (
+                          <option key={coachClass} value={coachClass}>
+                            {COACH_CLASS_LABELS[coachClass]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold text-slate-600">Seat layout</label>
+                      <select
+                        className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] font-medium text-slate-900 outline-none focus:border-indigo-600"
+                        value={coach.seatConfiguration}
+                        onChange={(e) =>
+                          handleCoachChange(
+                            index,
+                            'seatConfiguration',
+                            e.target.value as SeatConfiguration,
+                          )
+                        }
+                      >
+                        {SEAT_CONFIGURATIONS.map((config) => (
+                          <option key={config} value={config}>
+                            {config}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between gap-3">
-                    {/* Seats Count */}
                     <div className="flex items-center gap-1.5">
                       <label className="text-[11px] font-semibold text-slate-600">Seats:</label>
                       <input
                         type="number"
                         min="1"
                         max="120"
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-600"
+                        className={`w-16 px-2 py-1 bg-white border rounded-lg text-xs font-bold text-slate-900 text-center outline-none focus:border-indigo-600 ${
+                          layoutValid ? 'border-slate-200' : 'border-red-300 bg-red-50'
+                        }`}
                         value={coach.seatCount}
                         onChange={(e) =>
                           handleCoachChange(index, 'seatCount', parseInt(e.target.value) || 0)
@@ -339,7 +408,6 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                       />
                     </div>
 
-                    {/* Reservable Checkbox */}
                     <label className="inline-flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
                       <input
                         type="checkbox"
@@ -354,8 +422,15 @@ export const TrainConfigModal: React.FC<TrainConfigModalProps> = ({
                       </span>
                     </label>
                   </div>
+
+                  {!layoutValid && (
+                    <p className="mt-2 text-[10px] font-medium text-red-600">
+                      Seat count must divide evenly by {seatsPerRow(coach.seatConfiguration)} for {coach.seatConfiguration}.
+                    </p>
+                  )}
                 </div>
-              ))}
+              );
+              })}
             </div>
           </div>
 

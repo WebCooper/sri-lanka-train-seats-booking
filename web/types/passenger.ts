@@ -23,6 +23,8 @@ export interface TrainCoach {
   identifier: string;
   seat_count: number;
   is_reserved: boolean;
+  coach_class: string;
+  seat_configuration: string;
   position: number;
 }
 
@@ -90,6 +92,8 @@ export interface SeatAvailabilityCoach {
   seat_count: number;
   available_seats_count: number;
   is_reserved: boolean;
+  coach_class: string;
+  seat_configuration: string;
   seats: SeatAvailabilitySeat[];
 }
 

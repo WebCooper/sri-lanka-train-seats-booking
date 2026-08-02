@@ -1,11 +1,16 @@
 'use client';
 
 import type { SeatAvailabilityCoach } from '../types/passenger';
+import { COACH_CLASS_LABELS } from '../lib/coachLayout';
 
 interface CoachSelectorProps {
   coaches: SeatAvailabilityCoach[];
   selectedCoachId: string | null;
   onSelect: (coachId: string) => void;
+}
+
+function coachClassLabel(coachClass: string): string {
+  return COACH_CLASS_LABELS[coachClass] ?? coachClass;
 }
 
 export function CoachSelector({
@@ -31,13 +36,29 @@ export function CoachSelector({
             key={coach.coach_id}
             type="button"
             onClick={() => onSelect(coach.coach_id)}
-            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${
+            className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
               isSelected
-                ? 'border-indigo-600 bg-indigo-600 text-white'
+                ? 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400'
             }`}
           >
-            Coach {coach.identifier} ({coach.available_seats_count}/{coach.seat_count})
+            <span className="block text-xs font-bold">
+              Coach {coach.identifier}
+            </span>
+            <span
+              className={`mt-0.5 block text-[10px] font-semibold ${
+                isSelected ? 'text-indigo-100' : 'text-indigo-600'
+              }`}
+            >
+              {coachClassLabel(coach.coach_class)} • {coach.seat_configuration} layout
+            </span>
+            <span
+              className={`mt-1 block text-[10px] ${
+                isSelected ? 'text-indigo-100/90' : 'text-slate-500'
+              }`}
+            >
+              {coach.available_seats_count}/{coach.seat_count} seats available
+            </span>
           </button>
         );
       })}

@@ -84,7 +84,21 @@ src/
 | PUT | `/schedules/{id}` | Modify session time or assigned train | `departure_time`, `arrival_time`, `train_id` |
 | DELETE | `/schedules/{id}` | Cancel a scheduled session | None |
 
-### 7. Additional Operations: Analytics & Reporting
+### 7. Fare Model Configuration
+
+| Method | Endpoint | Description | Key Payload / Query |
+| --- | --- | --- | --- |
+| GET | `/fare-model` | Get fare model (flat fee, per-km rate, multipliers, peak rules) | None |
+| PUT | `/fare-model` | Update base fare settings and coach class multipliers | `flat_booking_fee`, `rate_per_km`, `off_peak_multiplier`, `coach_class_multipliers` |
+| POST | `/fare-model/quote` | Preview fare for a segment | `line_id`, `origin_station_id`, `destination_station_id`, `coach_class`, `departure_time` |
+| GET | `/fare-model/peak-rules` | List peak hour rules | None |
+| POST | `/fare-model/peak-rules` | Create peak hour rule | `name`, `start_time`, `end_time`, `multiplier`, `days_of_week` |
+| PUT | `/fare-model/peak-rules/{id}` | Update peak hour rule | `name`, `start_time`, `end_time`, `multiplier`, `days_of_week` |
+| DELETE | `/fare-model/peak-rules/{id}` | Delete peak hour rule | None |
+
+Fare formula: `(flat_booking_fee + distance_km * rate_per_km) * coach_class_multiplier * peak_or_off_peak_multiplier`
+
+### 8. Additional Operations: Analytics & Reporting
 
 Referencing the file Assignment - LSF SE Interview 2026.pdf, the following operations support the recommended administrative views:
 
@@ -111,5 +125,6 @@ GET,/stations,Fetch all stations to populate origin/destination dropdowns.,None
 GET,/schedules,Search for available train schedules.,"date, origin_id, destination_id"
 GET,/schedules/{id}/seats,View available seats for a specific leg of the journey.,"origin_id, destination_id"
 POST,/bookings/hold,Temporarily lock a seat for a specific segment to prevent race conditions during checkout.,"schedule_id, seat_id, origin_id, destination_id"
+POST,/bookings/quote,Preview fare for a journey segment using configured fare model.,"schedule_id, origin_station_id, destination_station_id, coach_class"
 POST,/bookings,Confirm booking and calculate the final fare.,"hold_id, passenger_details"
 GET,/bookings/{id},Retrieve confirmed ticket details.,None

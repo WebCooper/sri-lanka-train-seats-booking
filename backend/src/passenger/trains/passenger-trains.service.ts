@@ -74,6 +74,8 @@ export class PassengerTrainService {
         identifier: string;
         seatCount: number;
         isReserved: boolean;
+        coachClass: string;
+        seatConfiguration: string;
       };
     }>;
   }) {
@@ -82,6 +84,8 @@ export class PassengerTrainService {
       identifier: entry.coach.identifier,
       seat_count: entry.coach.seatCount,
       is_reserved: entry.coach.isReserved,
+      coach_class: entry.coach.coachClass,
+      seat_configuration: entry.coach.seatConfiguration,
       position: entry.position,
     }));
 

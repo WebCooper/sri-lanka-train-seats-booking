@@ -20,6 +20,8 @@ type CoachRecord = {
   seatCount: number;
   isReserved: boolean;
   identifier: string;
+  coachClass: string;
+  seatConfiguration: string;
 };
 
 type ScheduleWithRelations = Awaited<
@@ -285,6 +287,8 @@ export class PassengerScheduleService {
         seat_count: coach.seatCount,
         available_seats_count: availableCount,
         is_reserved: coach.isReserved,
+        coach_class: coach.coachClass,
+        seat_configuration: coach.seatConfiguration,
         seats,
       };
     });

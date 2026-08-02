@@ -8,9 +8,12 @@ import { prisma } from '../../../lib/prisma';
 import * as crypto from 'crypto';
 import { HoldSeatDto } from '../dto/hold-seat.dto';
 import { ConfirmBookingDto } from '../dto/confirm-booking.dto';
+import { FareQuoteRequestDto } from '../dto/fare-quote.dto';
+import { FareCalculationService } from '../../common/fare-calculation.service';
 
 @Injectable()
 export class PassengerBookingService {
+  constructor(private readonly fareCalculation: FareCalculationService) {}
   /**
    * Temporarily lock a seat for 10 minutes to prevent race conditions during checkout
    */
@@ -22,7 +25,10 @@ export class PassengerBookingService {
     }
 
     const [schedule, coach, originStation, destinationStation] = await Promise.all([
-      prisma.schedule.findUnique({ where: { id: schedule_id } }),
+      prisma.schedule.findUnique({
+        where: { id: schedule_id },
+        include: { line: true },
+      }),
       prisma.coach.findUnique({ where: { id: coach_id } }),
       prisma.station.findUnique({ where: { id: origin_id } }),
       prisma.station.findUnique({ where: { id: destination_id } }),
@@ -92,6 +98,14 @@ export class PassengerBookingService {
       },
     });
 
+    const fareQuote = await this.fareCalculation.calculateSegmentFareQuote(
+      schedule.lineId,
+      origin_id,
+      destination_id,
+      coach.coachClass,
+      schedule.departureTime,
+    );
+
     return {
       hold_id: hold.id,
       schedule_id: hold.scheduleId,
@@ -100,6 +114,10 @@ export class PassengerBookingService {
       origin_station: { id: originStation.id, name: originStation.name, code: originStation.code },
       destination_station: { id: destinationStation.id, name: destinationStation.name, code: destinationStation.code },
       expires_at: hold.expiresAt.toISOString(),
+      fare_quote: {
+        ...fareQuote,
+        currency: 'LKR',
+      },
       message: 'Seat locked successfully for 10 minutes',
     };
   }
@@ -136,13 +154,14 @@ export class PassengerBookingService {
       );
     }
 
-    // Calculate segment-based fare based on distance & coach class
-    const fareAmount = await this.calculateSegmentFare(
+    const fareQuote = await this.fareCalculation.calculateSegmentFareQuote(
       hold.schedule.lineId,
       hold.originStationId,
       hold.destinationStationId,
-      hold.coach.isReserved,
+      hold.coach.coachClass,
+      hold.schedule.departureTime,
     );
+    const fareAmount = fareQuote.fare_amount;
 
     // Generate unique booking reference (PNR-XXXXXX)
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
@@ -217,51 +236,34 @@ export class PassengerBookingService {
     return this.formatTicketResponse(booking);
   }
 
-  /**
-   * Segment-based fare calculation algorithm:
-   * Fare = Max(Minimum Base Fare, Distance (km) * Rate Per Km)
-   */
-  private async calculateSegmentFare(
-    lineId: string,
-    originStationId: string,
-    destinationStationId: string,
-    isReservedCoach: boolean,
-  ): Promise<number> {
-    const lineStations = await prisma.lineStation.findMany({
-      where: { lineId },
+  async quoteFare(dto: FareQuoteRequestDto) {
+    const schedule = await prisma.schedule.findUnique({
+      where: { id: dto.schedule_id },
+      include: { line: true },
     });
 
-    const line = await prisma.line.findUnique({
-      where: { id: lineId },
-      select: { startStationId: true, endStationId: true },
-    });
-
-    let originDist = 0;
-    let destDist = 0;
-
-    if (originStationId === line?.startStationId) {
-      originDist = 0;
-    } else {
-      const match = lineStations.find((ls) => ls.stationId === originStationId);
-      originDist = match?.distanceFromStart ?? 0;
+    if (!schedule) {
+      throw new NotFoundException(`Schedule session with ID "${dto.schedule_id}" not found`);
     }
 
-    if (destinationStationId === line?.startStationId) {
-      destDist = 0;
-    } else {
-      const match = lineStations.find((ls) => ls.stationId === destinationStationId);
-      destDist = match?.distanceFromStart ?? (originDist + 100);
+    if (dto.origin_station_id === dto.destination_station_id) {
+      throw new BadRequestException('Origin and destination stations cannot be the same');
     }
 
-    const distanceKm = Math.abs(destDist - originDist);
+    const breakdown = await this.fareCalculation.calculateSegmentFareQuote(
+      schedule.lineId,
+      dto.origin_station_id,
+      dto.destination_station_id,
+      dto.coach_class,
+      schedule.departureTime,
+    );
 
-    // Segment fare parameters
-    const ratePerKm = isReservedCoach ? 20.00 : 10.00;
-    const minFare = isReservedCoach ? 500.00 : 200.00;
-
-    const calculatedFare = distanceKm > 0 ? distanceKm * ratePerKm : (isReservedCoach ? 2500.00 : 1500.00);
-
-    return Math.round(Math.max(minFare, calculatedFare) * 100) / 100;
+    return {
+      ...breakdown,
+      currency: 'LKR',
+      schedule_id: dto.schedule_id,
+      departure_time: schedule.departureTime.toISOString(),
+    };
   }
 
   /**

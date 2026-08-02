@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { prisma } from '../../../lib/prisma';
+import { isSeatCountCompatible } from '../../common/coach.util';
 import { CreateCoachDto } from './dto/create-coach.dto';
 import { UpdateCoachDto } from './dto/update-coach.dto';
 import { QueryCoachDto } from './dto/query-coach.dto';
@@ -19,9 +20,11 @@ export class CoachService {
     const limit = query.limit ?? 10;
     const search = query.search?.trim();
     const isReserved = query.is_reserved;
+    const coachClass = query.coach_class;
 
     const whereCondition = {
       ...(isReserved !== undefined ? { isReserved } : {}),
+      ...(coachClass ? { coachClass } : {}),
       ...(search
         ? {
             identifier: { contains: search, mode: 'insensitive' as const },
@@ -67,6 +70,8 @@ export class CoachService {
   async createCoach(dto: CreateCoachDto) {
     const identifierUpper = dto.identifier.toUpperCase().trim();
 
+    this.assertSeatCountCompatible(dto.seat_count, dto.seat_configuration);
+
     const existingIdentifier = await prisma.coach.findUnique({
       where: { identifier: identifierUpper },
     });
@@ -82,6 +87,8 @@ export class CoachService {
         identifier: identifierUpper,
         seatCount: dto.seat_count,
         isReserved: dto.is_reserved ?? false,
+        coachClass: dto.coach_class,
+        seatConfiguration: dto.seat_configuration,
       },
       include: {
         trainCoaches: {
@@ -125,6 +132,12 @@ export class CoachService {
   async updateCoach(id: string, dto: UpdateCoachDto) {
     const existingCoach = await this.findOne(id);
 
+    const seatCount = dto.seat_count ?? existingCoach.seat_count;
+    const seatConfiguration =
+      dto.seat_configuration ?? existingCoach.seat_configuration;
+
+    this.assertSeatCountCompatible(seatCount, seatConfiguration);
+
     if (
       dto.identifier &&
       dto.identifier.toUpperCase().trim() !== existingCoach.identifier
@@ -149,6 +162,12 @@ export class CoachService {
         ...(dto.seat_count !== undefined ? { seatCount: dto.seat_count } : {}),
         ...(dto.is_reserved !== undefined
           ? { isReserved: dto.is_reserved }
+          : {}),
+        ...(dto.coach_class !== undefined
+          ? { coachClass: dto.coach_class }
+          : {}),
+        ...(dto.seat_configuration !== undefined
+          ? { seatConfiguration: dto.seat_configuration }
           : {}),
       },
       include: {
@@ -207,10 +226,23 @@ export class CoachService {
       identifier: coach.identifier,
       seat_count: coach.seatCount,
       is_reserved: coach.isReserved,
+      coach_class: coach.coachClass,
+      seat_configuration: coach.seatConfiguration,
       attached_trains_count: attachedTrains.length,
       attached_trains: attachedTrains,
       createdAt: coach.createdAt,
       updatedAt: coach.updatedAt,
     };
+  }
+
+  private assertSeatCountCompatible(
+    seatCount: number,
+    seatConfiguration: string,
+  ) {
+    if (!isSeatCountCompatible(seatCount, seatConfiguration)) {
+      throw new BadRequestException(
+        `Seat count (${seatCount}) must be evenly divisible by seats per row (${seatConfiguration})`,
+      );
+    }
   }
 }

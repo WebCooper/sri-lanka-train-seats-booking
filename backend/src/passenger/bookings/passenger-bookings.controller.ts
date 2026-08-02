@@ -3,6 +3,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PassengerBookingService } from './passenger-bookings.service';
 import { HoldSeatDto } from '../dto/hold-seat.dto';
 import { ConfirmBookingDto } from '../dto/confirm-booking.dto';
+import { FareQuoteRequestDto } from '../dto/fare-quote.dto';
 import { AllowAnonymous, CurrentUser } from '../../auth';
 
 @ApiTags('Passenger - Bookings & Checkout')
@@ -31,6 +32,21 @@ export class PassengerBookingController {
     @CurrentUser('id') userId?: string,
   ) {
     return this.bookingService.holdSeat(dto, userId);
+  }
+
+  /**
+   * POST /api/v1/bookings/quote
+   * Preview fare for a journey segment before holding a seat
+   */
+  @Post('quote')
+  @ApiOperation({
+    summary: 'Preview fare for a journey segment',
+    description:
+      'Calculates fare using configured flat fee, per-km rate, coach class multiplier, and peak/off-peak rules.',
+  })
+  @ApiResponse({ status: 200, description: 'Fare quote returned.' })
+  async quoteFare(@Body() dto: FareQuoteRequestDto) {
+    return this.bookingService.quoteFare(dto);
   }
 
   /**

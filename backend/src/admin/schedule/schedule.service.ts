@@ -294,6 +294,8 @@ export class ScheduleService {
           identifier: tc.coach.identifier,
           seat_count: tc.coach.seatCount,
           is_reserved: tc.coach.isReserved,
+          coach_class: tc.coach.coachClass,
+          seat_configuration: tc.coach.seatConfiguration,
           position: tc.position,
         }))
       : [];

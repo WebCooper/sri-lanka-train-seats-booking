@@ -2,6 +2,12 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { prisma } from '../lib/prisma';
+import {
+  DEFAULT_COACH_CLASS_MULTIPLIERS,
+  DEFAULT_FARE_SETTINGS,
+  FARE_SETTINGS_ID,
+  defaultCoachClassMultipliers,
+} from '../src/common/fare.util';
 
 // Well-known Sri Lankan Railway station codes mapping
 const KNOWN_CODES: Record<string, string> = {
@@ -136,6 +142,64 @@ async function main() {
   }
 
   console.log(`✅ Successfully seeded/updated ${insertedCount} stations in the database.`);
+
+  await seedFareModel();
+}
+
+async function seedFareModel() {
+  console.log('💰 Seeding fare model defaults...');
+
+  await prisma.fareSettings.upsert({
+    where: { id: FARE_SETTINGS_ID },
+    create: {
+      id: FARE_SETTINGS_ID,
+      flatBookingFee: DEFAULT_FARE_SETTINGS.flatBookingFee,
+      ratePerKm: DEFAULT_FARE_SETTINGS.ratePerKm,
+      offPeakMultiplier: DEFAULT_FARE_SETTINGS.offPeakMultiplier,
+    },
+    update: {
+      flatBookingFee: DEFAULT_FARE_SETTINGS.flatBookingFee,
+      ratePerKm: DEFAULT_FARE_SETTINGS.ratePerKm,
+      offPeakMultiplier: DEFAULT_FARE_SETTINGS.offPeakMultiplier,
+    },
+  });
+
+  for (const entry of defaultCoachClassMultipliers()) {
+    await prisma.coachClassFareMultiplier.upsert({
+      where: { coachClass: entry.coachClass },
+      create: {
+        coachClass: entry.coachClass,
+        multiplier: entry.multiplier,
+      },
+      update: {
+        multiplier: DEFAULT_COACH_CLASS_MULTIPLIERS[entry.coachClass],
+      },
+    });
+  }
+
+  const peakRuleCount = await prisma.peakHourRule.count();
+  if (peakRuleCount === 0) {
+    await prisma.peakHourRule.createMany({
+      data: [
+        {
+          name: 'Morning Peak',
+          startTime: '07:00',
+          endTime: '09:30',
+          multiplier: 1.25,
+          daysOfWeek: [1, 2, 3, 4, 5],
+        },
+        {
+          name: 'Evening Peak',
+          startTime: '17:00',
+          endTime: '19:00',
+          multiplier: 1.25,
+          daysOfWeek: [1, 2, 3, 4, 5],
+        },
+      ],
+    });
+  }
+
+  console.log('✅ Fare model defaults seeded.');
 }
 
 main()

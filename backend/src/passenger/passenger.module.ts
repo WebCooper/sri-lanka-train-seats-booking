@@ -9,6 +9,7 @@ import { PassengerLineController } from './lines/passenger-lines.controller';
 import { PassengerLineService } from './lines/passenger-lines.service';
 import { PassengerTrainController } from './trains/passenger-trains.controller';
 import { PassengerTrainService } from './trains/passenger-trains.service';
+import { FareCalculationService } from '../common/fare-calculation.service';
 
 @Module({
   controllers: [
@@ -24,6 +25,7 @@ import { PassengerTrainService } from './trains/passenger-trains.service';
     PassengerTrainService,
     PassengerScheduleService,
     PassengerBookingService,
+    FareCalculationService,
   ],
   exports: [
     PassengerStationService,

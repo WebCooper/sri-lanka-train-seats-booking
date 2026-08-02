@@ -94,13 +94,13 @@ model Station {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  startLines         Line[]        @relation("StartStation")
-  endLines           Line[]        @relation("EndStation")
-  lineIntermediaries LineStation[]
-  holdOrigins        SeatHold[]    @relation("HoldOrigin")
-  holdDestinations   SeatHold[]    @relation("HoldDestination")
-  bookingOrigins     Booking[]     @relation("BookingOrigin")
-  bookingDestinations Booking[]    @relation("BookingDestination")
+  startLines          Line[]        @relation("StartStation")
+  endLines            Line[]        @relation("EndStation")
+  lineIntermediaries  LineStation[]
+  holdOrigins         SeatHold[]    @relation("HoldOrigin")
+  holdDestinations    SeatHold[]    @relation("HoldDestination")
+  bookingOrigins      Booking[]     @relation("BookingOrigin")
+  bookingDestinations Booking[]     @relation("BookingDestination")
 
   @@map("station")
 }
@@ -136,12 +136,14 @@ model LineStation {
 }
 
 model Coach {
-  id         String       @id @default(uuid())
-  identifier String       @unique
-  seatCount  Int          @map("seat_count")
-  isReserved Boolean      @default(false) @map("is_reserved")
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id                String   @id @default(uuid())
+  identifier        String   @unique
+  seatCount         Int      @map("seat_count")
+  isReserved        Boolean  @default(false) @map("is_reserved")
+  coachClass        String   @map("coach_class")
+  seatConfiguration String   @map("seat_configuration")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   trainCoaches TrainCoach[]
   seatHolds    SeatHold[]
@@ -213,6 +215,38 @@ model SeatHold {
 
   @@index([scheduleId, coachId, seatNumber])
   @@map("seat_hold")
+}
+
+model FareSettings {
+  id                String   @id @default("singleton")
+  flatBookingFee    Float    @default(50) @map("flat_booking_fee")
+  ratePerKm         Float    @default(10) @map("rate_per_km")
+  offPeakMultiplier Float    @default(1) @map("off_peak_multiplier")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("fare_settings")
+}
+
+model CoachClassFareMultiplier {
+  id         String @id @default(uuid())
+  coachClass String @unique @map("coach_class")
+  multiplier Float  @default(1)
+
+  @@map("coach_class_fare_multiplier")
+}
+
+model PeakHourRule {
+  id         String   @id @default(uuid())
+  name       String
+  startTime  String   @map("start_time")
+  endTime    String   @map("end_time")
+  multiplier Float    @default(1.25)
+  daysOfWeek Int[]    @default([1, 2, 3, 4, 5]) @map("days_of_week")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("peak_hour_rule")
 }
 
 model Booking {
