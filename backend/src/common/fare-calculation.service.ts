@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { prisma } from '../../lib/prisma';
 import {
   buildFareQuoteBreakdown,
+  calculateSegmentDistanceKm,
   DEFAULT_COACH_CLASS_MULTIPLIERS,
   DEFAULT_FARE_SETTINGS,
   FARE_SETTINGS_ID,
@@ -17,33 +18,33 @@ export class FareCalculationService {
     originStationId: string,
     destinationStationId: string,
   ): Promise<number> {
-    const lineStations = await prisma.lineStation.findMany({
-      where: { lineId },
-    });
-
     const line = await prisma.line.findUnique({
       where: { id: lineId },
-      select: { startStationId: true, endStationId: true },
+      select: {
+        startStationId: true,
+        endStationId: true,
+        startStation: { select: { cumulativeDistance: true } },
+        endStation: { select: { cumulativeDistance: true } },
+        stations: {
+          select: { stationId: true, distanceFromStart: true },
+        },
+      },
     });
 
-    let originDist = 0;
-    let destDist = 0;
-
-    if (originStationId === line?.startStationId) {
-      originDist = 0;
-    } else {
-      const match = lineStations.find((ls) => ls.stationId === originStationId);
-      originDist = match?.distanceFromStart ?? 0;
+    if (!line) {
+      return 0;
     }
 
-    if (destinationStationId === line?.startStationId) {
-      destDist = 0;
-    } else {
-      const match = lineStations.find((ls) => ls.stationId === destinationStationId);
-      destDist = match?.distanceFromStart ?? originDist;
-    }
-
-    return Math.abs(destDist - originDist);
+    return calculateSegmentDistanceKm(originStationId, destinationStationId, {
+      startStationId: line.startStationId,
+      endStationId: line.endStationId,
+      startCumulativeDistance: line.startStation.cumulativeDistance,
+      endCumulativeDistance: line.endStation.cumulativeDistance,
+      lineStations: line.stations.map((entry) => ({
+        stationId: entry.stationId,
+        distanceFromStart: entry.distanceFromStart,
+      })),
+    });
   }
 
   async calculateSegmentFareQuote(

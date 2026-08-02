@@ -41,27 +41,27 @@ export function ScheduleResultsList({
                 : 'border-slate-200 bg-white hover:border-indigo-300'
             }`}
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
                   <Train className="h-5 w-5" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    {schedule.train.name} (#{schedule.train.train_number})
-                  </h3>
-                  <p className="text-xs text-slate-500">{schedule.line.name}</p>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {formatScheduleDate(schedule.departure_time)} • Departs{' '}
-                    {formatScheduleTime(schedule.departure_time)} • Arrives{' '}
-                    {formatScheduleTime(schedule.arrival_time)}
+
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900">{schedule.train.name}</h3>
+                  <p className="mt-0.5 text-xs font-medium text-indigo-600">{schedule.line.name}</p>
+                  <p className="mt-2 text-xs text-slate-600">
+                    {formatScheduleDate(schedule.departure_time)}
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">
+                    DEPARTS {formatScheduleTime(schedule.departure_time)}
                   </p>
                 </div>
               </div>
 
-              <span className="rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold text-emerald-800">
                 {schedule.available_reserved_seats_count !== undefined
-                  ? `${schedule.available_reserved_seats_count} reserved seats free`
+                  ? `${schedule.available_reserved_seats_count} seats free`
                   : 'Seats available'}
               </span>
             </div>

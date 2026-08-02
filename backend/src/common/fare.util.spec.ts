@@ -1,6 +1,7 @@
 import {
   buildFareQuoteBreakdown,
   calculateFareAmount,
+  calculateSegmentDistanceKm,
   isDepartureInPeakWindow,
   resolveTimeMultiplier,
 } from './fare.util';
@@ -48,5 +49,23 @@ describe('fare.util', () => {
     expect(breakdown.base_amount).toBe(1050);
     expect(breakdown.fare_amount).toBe(1575);
     expect(breakdown.time_band).toBe('off_peak');
+  });
+
+  it('calculates segment distance using line start, intermediates, and end', () => {
+    const line = {
+      startStationId: 'colombo',
+      endStationId: 'badulla',
+      startCumulativeDistance: 0,
+      endCumulativeDistance: 292,
+      lineStations: [
+        { stationId: 'kandy', distanceFromStart: 121 },
+        { stationId: 'ella', distanceFromStart: 272 },
+      ],
+    };
+
+    expect(calculateSegmentDistanceKm('colombo', 'kandy', line)).toBe(121);
+    expect(calculateSegmentDistanceKm('kandy', 'badulla', line)).toBe(171);
+    expect(calculateSegmentDistanceKm('kandy', 'ella', line)).toBe(151);
+    expect(calculateSegmentDistanceKm('colombo', 'badulla', line)).toBe(292);
   });
 });

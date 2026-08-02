@@ -11,10 +11,15 @@ export interface LineWithStations {
 }
 
 export function buildStationSequence(line: LineWithStations): StationSequenceEntry[] {
+  const intermediates = [...line.stations].sort((a, b) => a.position - b.position);
+
   return [
-    { id: line.startStationId, position: -1 },
-    ...line.stations.map((s) => ({ id: s.stationId, position: s.position })),
-    { id: line.endStationId, position: 999999 },
+    { id: line.startStationId, position: 0 },
+    ...intermediates.map((station, index) => ({
+      id: station.stationId,
+      position: index + 1,
+    })),
+    { id: line.endStationId, position: intermediates.length + 1 },
   ];
 }
 

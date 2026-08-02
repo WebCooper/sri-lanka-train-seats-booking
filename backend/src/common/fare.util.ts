@@ -137,3 +137,38 @@ export function defaultCoachClassMultipliers(): Array<{
     multiplier: DEFAULT_COACH_CLASS_MULTIPLIERS[coachClass],
   }));
 }
+
+export interface LineDistanceContext {
+  startStationId: string;
+  endStationId: string;
+  startCumulativeDistance: number;
+  endCumulativeDistance: number;
+  lineStations: Array<{ stationId: string; distanceFromStart: number }>;
+}
+
+/** Distance from the line origin; matches line API ordering (start → intermediates → end). */
+export function resolveDistanceFromLineStart(
+  stationId: string,
+  line: LineDistanceContext,
+): number {
+  if (stationId === line.startStationId) {
+    return 0;
+  }
+
+  if (stationId === line.endStationId) {
+    return Math.abs(line.endCumulativeDistance - line.startCumulativeDistance);
+  }
+
+  const match = line.lineStations.find((ls) => ls.stationId === stationId);
+  return match?.distanceFromStart ?? 0;
+}
+
+export function calculateSegmentDistanceKm(
+  originStationId: string,
+  destinationStationId: string,
+  line: LineDistanceContext,
+): number {
+  const originDist = resolveDistanceFromLineStart(originStationId, line);
+  const destDist = resolveDistanceFromLineStart(destinationStationId, line);
+  return Math.abs(destDist - originDist);
+}

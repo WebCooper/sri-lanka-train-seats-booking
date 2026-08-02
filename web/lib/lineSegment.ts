@@ -4,20 +4,20 @@ export interface OrderedLineStation extends Station {
   position: number;
 }
 
-/** Ordered sequence matching backend line-segment.util (half-open segment indices). */
+/** Ordered sequence with 0-based indexes: start → intermediates → end. */
 export function getLineStationSequence(line: Line): OrderedLineStation[] {
   const intermediates = [...line.stations].sort((a, b) => a.position - b.position);
 
   return [
-    { ...line.start_station, position: -1 },
-    ...intermediates.map((station) => ({
+    { ...line.start_station, position: 0 },
+    ...intermediates.map((station, index) => ({
       id: station.id,
       name: station.name,
       code: station.code,
       location: station.location,
-      position: station.position,
+      position: index + 1,
     })),
-    { ...line.end_station, position: 999999 },
+    { ...line.end_station, position: intermediates.length + 1 },
   ];
 }
 

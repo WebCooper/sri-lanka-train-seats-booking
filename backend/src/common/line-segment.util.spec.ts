@@ -36,8 +36,12 @@ describe('line-segment.util', () => {
 
   it('returns positions only when origin precedes destination', () => {
     expect(getSegmentPositions(sequence, 'colombo', 'kandy')).toEqual({
-      originPos: -1,
+      originPos: 0,
       destPos: 1,
+    });
+    expect(getSegmentPositions(sequence, 'kandy', 'badulla')).toEqual({
+      originPos: 1,
+      destPos: 3,
     });
     expect(getSegmentPositions(sequence, 'kandy', 'colombo')).toBeNull();
   });

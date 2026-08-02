@@ -204,7 +204,7 @@ export function PaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="Close payment modal"
@@ -217,14 +217,14 @@ export function PaymentModal({
       />
 
       <div
-        className="relative z-10 w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20"
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 sm:max-h-[min(90dvh,44rem)] sm:rounded-3xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-modal-title"
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <h2 id="payment-modal-title" className="text-lg font-bold text-slate-900">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:items-center sm:px-6 sm:py-4">
+          <div className="min-w-0 pr-2">
+            <h2 id="payment-modal-title" className="text-base font-bold text-slate-900 sm:text-lg">
               {confirmedTicket ? 'Booking confirmed' : 'Complete payment'}
             </h2>
             <p className="text-xs text-slate-500">
@@ -238,14 +238,15 @@ export function PaymentModal({
             type="button"
             onClick={onClose}
             disabled={isProcessing}
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="shrink-0 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))]">
         {confirmedTicket ? (
-          <div className="space-y-4 px-6 py-8">
+          <div className="space-y-4 px-4 py-5 sm:px-6 sm:py-8">
             <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
@@ -270,11 +271,11 @@ export function PaymentModal({
               </p>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-stretch sm:justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                className="w-full rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 sm:w-auto"
               >
                 Done
               </button>
@@ -282,7 +283,7 @@ export function PaymentModal({
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            <div className="border-b border-slate-100 bg-slate-50/80 px-6 py-6 lg:border-b-0 lg:border-r">
+            <div className="border-b border-slate-100 bg-slate-50/80 px-4 py-5 sm:px-6 sm:py-6 lg:border-b-0 lg:border-r">
               <h3 className="text-sm font-bold text-slate-900">Pricing breakdown</h3>
               <p className="mt-1 text-xs text-slate-500">
                 {journey.trainName} (#{journey.trainNumber}) on {journey.lineName}
@@ -302,43 +303,43 @@ export function PaymentModal({
               )}
 
               {fareQuote && !isLoadingQuote && (
-              <div className="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
-                <div className="flex justify-between gap-4 text-slate-600">
-                  <span>Flat booking fee</span>
-                  <span>
+              <div className="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white p-3 text-xs sm:p-4 sm:text-sm">
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span className="min-w-0">Flat booking fee</span>
+                  <span className="shrink-0 text-right">
                     {fareQuote.currency} {fareQuote.flat_booking_fee.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4 text-slate-600">
-                  <span>
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span className="min-w-0">
                     Distance ({fareQuote.distance_km} km)
                   </span>
-                  <span>
+                  <span className="shrink-0 text-right">
                     {fareQuote.currency} {fareQuote.distance_charge.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4 text-slate-600">
-                  <span>Base subtotal</span>
-                  <span>
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span className="min-w-0">Base subtotal</span>
+                  <span className="shrink-0 text-right">
                     {fareQuote.currency} {fareQuote.base_amount.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between gap-4 text-slate-600">
-                  <span>
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span className="min-w-0">
                     {coachClassLabel(fareQuote.coach_class)} ({fareQuote.coach_class_multiplier}x)
                   </span>
-                  <span>Included</span>
+                  <span className="shrink-0 text-right">Included</span>
                 </div>
-                <div className="flex justify-between gap-4 text-slate-600">
-                  <span>
+                <div className="flex justify-between gap-3 text-slate-600">
+                  <span className="min-w-0">
                     {timeBandLabel(fareQuote.time_band)} ({fareQuote.time_multiplier}x)
                   </span>
-                  <span>Included</span>
+                  <span className="shrink-0 text-right">Included</span>
                 </div>
                 <div className="border-t border-slate-100 pt-3">
-                  <div className="flex justify-between gap-4 text-base font-bold text-slate-900">
+                  <div className="flex justify-between gap-3 text-sm font-bold text-slate-900 sm:text-base">
                     <span>Total</span>
-                    <span>
+                    <span className="shrink-0 text-right">
                       {fareQuote.currency} {fareQuote.fare_amount.toFixed(2)}
                     </span>
                   </div>
@@ -356,20 +357,24 @@ export function PaymentModal({
               </div>
             </div>
 
-            <div className="px-6 py-6">
+            <div className="px-4 py-5 sm:px-6 sm:py-6">
               <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <CreditCard className="h-4 w-4 text-indigo-600" />
+                <CreditCard className="h-4 w-4 shrink-0 text-indigo-600" />
                 Card details
               </div>
 
-              <div className="mb-4 space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+              <div className="mb-4 space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-[11px] text-slate-600 sm:px-4 sm:text-xs">
                 <p className="font-semibold text-slate-800">Demo cards</p>
-                <p>
-                  <span className="font-mono text-slate-800">{MOCK_PAYMENT_CARDS.success.display}</span>{' '}
+                <p className="break-words">
+                  <span className="break-all font-mono text-slate-800">
+                    {MOCK_PAYMENT_CARDS.success.display}
+                  </span>{' '}
                   — {MOCK_PAYMENT_CARDS.success.description}
                 </p>
-                <p>
-                  <span className="font-mono text-slate-800">{MOCK_PAYMENT_CARDS.decline.display}</span>{' '}
+                <p className="break-words">
+                  <span className="break-all font-mono text-slate-800">
+                    {MOCK_PAYMENT_CARDS.decline.display}
+                  </span>{' '}
                   — {MOCK_PAYMENT_CARDS.decline.description}
                 </p>
               </div>
@@ -400,7 +405,7 @@ export function PaymentModal({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-semibold text-slate-700">Expiry</label>
                     <input
@@ -459,6 +464,7 @@ export function PaymentModal({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

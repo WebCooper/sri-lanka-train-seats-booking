@@ -99,6 +99,14 @@ export const COACH_FRAME = {
   viewportHeight: 300,
 } as const;
 
+/** Portrait coach frame for mobile — natural row stack, no CSS rotation. */
+export const COACH_PORTRAIT_FRAME = {
+  bodyWidth: COACH_FRAME.bodyWidth,
+  maxBodyHeight: 720,
+} as const;
+
+export type CoachMapOrientation = 'portrait' | 'landscape';
+
 function scaleLayout(
   layout: SeatMapLayoutMetrics,
   scale: number,
@@ -119,17 +127,23 @@ function scaleLayout(
 export function resolveCoachSeatLayout(
   rowCount: number,
   seatConfiguration: string,
+  orientation: CoachMapOrientation = 'landscape',
 ): SeatMapLayoutMetrics {
   let layout = { ...BASE_SEAT_MAP_LAYOUT };
 
+  const bodyWidth =
+    orientation === 'portrait' ? COACH_PORTRAIT_FRAME.bodyWidth : COACH_FRAME.bodyWidth;
+  const bodyHeight =
+    orientation === 'portrait' ? COACH_PORTRAIT_FRAME.maxBodyHeight : COACH_FRAME.bodyHeight;
+
   const rowWidth = estimateRowWidth(seatConfiguration, layout);
-  if (rowWidth > COACH_FRAME.bodyWidth - layout.coachPadding) {
-    const availableWidth = COACH_FRAME.bodyWidth - layout.coachPadding;
+  if (rowWidth > bodyWidth - layout.coachPadding) {
+    const availableWidth = bodyWidth - layout.coachPadding;
     layout = scaleLayout(layout, availableWidth / rowWidth);
   }
 
   const stackHeight = estimateCoachStackHeight(rowCount, layout);
-  const availableHeight = COACH_FRAME.bodyHeight - layout.coachPadding;
+  const availableHeight = bodyHeight - layout.coachPadding;
   if (stackHeight > availableHeight) {
     layout = scaleLayout(layout, availableHeight / stackHeight);
   }

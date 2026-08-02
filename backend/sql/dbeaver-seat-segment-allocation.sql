@@ -4,6 +4,8 @@
 --
 -- Segment positions (origin_position, destination_position) are written by the
 -- NestJS API using line-segment.util — not computed in the database.
+-- Indexes are 0-based along the full line: 0 = start station, 1..n = intermediates
+-- (ordered by line_station.position), n+1 = end station. Ranges are half-open [origin, dest).
 -- =============================================================================
 
 BEGIN;
