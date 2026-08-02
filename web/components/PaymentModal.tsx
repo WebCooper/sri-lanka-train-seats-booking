@@ -8,7 +8,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { confirmBookingApi } from '../lib/passengerApi';
+import { confirmBookingApi, quoteFareApi } from '../lib/passengerApi';
 import { getApiErrorMessage } from '../lib/axiosInstance';
 import {
   formatCardNumber,
@@ -30,10 +30,17 @@ interface PaymentJourneySummary {
   departureTime: string;
 }
 
+interface FareQuoteParams {
+  schedule_id: string;
+  origin_station_id: string;
+  destination_station_id: string;
+  coach_class: string;
+}
+
 interface PaymentModalProps {
   isOpen: boolean;
   holdId: string;
-  fareQuote: FareQuote;
+  quoteParams: FareQuoteParams;
   journey: PaymentJourneySummary;
   passengerName: string;
   passengerEmail: string;
@@ -55,7 +62,7 @@ function timeBandLabel(timeBand: FareQuote['time_band']): string {
 export function PaymentModal({
   isOpen,
   holdId,
-  fareQuote,
+  quoteParams,
   journey,
   passengerName,
   passengerEmail,
@@ -69,6 +76,9 @@ export function PaymentModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmedTicket, setConfirmedTicket] = useState<BookingTicket | null>(null);
+  const [fareQuote, setFareQuote] = useState<FareQuote | null>(null);
+  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -82,7 +92,40 @@ export function PaymentModal({
     setFormError(null);
     setIsProcessing(false);
     setConfirmedTicket(null);
-  }, [isOpen, passengerName]);
+    setFareQuote(null);
+    setQuoteError(null);
+
+    let cancelled = false;
+    setIsLoadingQuote(true);
+
+    quoteFareApi(quoteParams)
+      .then((quote) => {
+        if (!cancelled) {
+          setFareQuote(quote);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setQuoteError(getApiErrorMessage(error, 'Could not load fare breakdown.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingQuote(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    passengerName,
+    quoteParams.schedule_id,
+    quoteParams.origin_station_id,
+    quoteParams.destination_station_id,
+    quoteParams.coach_class,
+  ]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -116,6 +159,11 @@ export function PaymentModal({
 
     if (validationError) {
       setFormError(validationError);
+      return;
+    }
+
+    if (!fareQuote) {
+      setFormError('Fare breakdown is not ready yet. Please wait or close and try again.');
       return;
     }
 
@@ -218,7 +266,7 @@ export function PaymentModal({
                 {journey.originName} → {journey.destinationName}
               </p>
               <p className="mt-2 font-semibold text-slate-900">
-                Total paid: {fareQuote.currency} {confirmedTicket.fare_amount.toFixed(2)}
+                Total paid: LKR {confirmedTicket.fare_amount.toFixed(2)}
               </p>
             </div>
 
@@ -240,6 +288,20 @@ export function PaymentModal({
                 {journey.trainName} (#{journey.trainNumber}) on {journey.lineName}
               </p>
 
+              {isLoadingQuote && (
+                <div className="mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-600">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                  Loading fare breakdown...
+                </div>
+              )}
+
+              {quoteError && !isLoadingQuote && (
+                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-800">
+                  {quoteError}
+                </div>
+              )}
+
+              {fareQuote && !isLoadingQuote && (
               <div className="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
                 <div className="flex justify-between gap-4 text-slate-600">
                   <span>Flat booking fee</span>
@@ -282,6 +344,7 @@ export function PaymentModal({
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-900">
                 <p className="font-semibold">
@@ -376,7 +439,7 @@ export function PaymentModal({
 
                 <button
                   type="submit"
-                  disabled={isProcessing}
+                  disabled={isProcessing || isLoadingQuote || !fareQuote}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isProcessing ? (
@@ -384,6 +447,8 @@ export function PaymentModal({
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Processing payment...
                     </>
+                  ) : isLoadingQuote || !fareQuote ? (
+                    'Loading price...'
                   ) : (
                     <>
                       Pay {fareQuote.currency} {fareQuote.fare_amount.toFixed(2)}

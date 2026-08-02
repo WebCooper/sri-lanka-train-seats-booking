@@ -7,13 +7,13 @@ import { PassengerLayout } from '../../../components/PassengerLayout';
 import { ScheduleResultsList } from '../../../components/ScheduleResultsList';
 import { CoachSelector } from '../../../components/CoachSelector';
 import { SeatMap } from '../../../components/SeatMap';
+import { StationCombobox } from '../../../components/StationCombobox';
 import { HoldTimerPopup } from '../../../components/HoldTimerPopup';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { usePassengerAuth } from '../../../context/PassengerAuthContext';
 import toast from 'react-hot-toast';
 import {
   ChevronRight,
-  MapPin,
   Calendar,
   Search,
   Train,
@@ -26,12 +26,10 @@ import {
   fetchSeatAvailabilityApi,
   fetchStationsApi,
   holdSeatApi,
-  quoteFareApi,
   searchSchedulesApi,
 } from '../../../lib/passengerApi';
 import type {
   BookingTicket,
-  FareQuote,
   HoldSeatResponse,
   ScheduleSummary,
   SeatAvailabilityResponse,
@@ -48,8 +46,8 @@ interface ActiveHoldState {
   coachId: string;
   seatNumber: number;
   coachIdentifier: string;
+  coachClass: string;
   expiresAt: string;
-  fareQuote: FareQuote;
 }
 
 export default function BookSeatPage() {
@@ -67,9 +65,6 @@ export default function BookSeatPage() {
   const [pendingSeat, setPendingSeat] = useState<number | null>(null);
   const [lostSeatNumber, setLostSeatNumber] = useState<number | null>(null);
   const [activeHold, setActiveHold] = useState<ActiveHoldState | null>(null);
-  const [pendingFareQuote, setPendingFareQuote] = useState<FareQuote | null>(null);
-  const [fareQuoteError, setFareQuoteError] = useState<string | null>(null);
-  const [isLoadingFareQuote, setIsLoadingFareQuote] = useState(false);
 
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -86,6 +81,8 @@ export default function BookSeatPage() {
   const [paymentSession, setPaymentSession] = useState<{
     hold: ActiveHoldState;
     schedule: ScheduleSummary;
+    originId: string;
+    destinationId: string;
   } | null>(null);
 
   const seatMapVisible = Boolean(selectedSchedule && originId && destinationId);
@@ -95,11 +92,6 @@ export default function BookSeatPage() {
   const sortedStations = useMemo(
     () => [...stations].sort((a, b) => a.name.localeCompare(b.name)),
     [stations],
-  );
-
-  const destinationStationOptions = useMemo(
-    () => sortedStations.filter((station) => station.id !== originId),
-    [originId, sortedStations],
   );
 
   const stationById = useMemo(
@@ -121,8 +113,6 @@ export default function BookSeatPage() {
 
   const clearSeatSelection = useCallback(() => {
     setPendingSeat(null);
-    setPendingFareQuote(null);
-    setFareQuoteError(null);
     setHoldError(null);
     setLostSeatNumber(null);
   }, []);
@@ -169,9 +159,6 @@ export default function BookSeatPage() {
               seat.seat_number === options.preservePendingSeat && seat.is_available,
           );
           setPendingSeat(seatStillAvailable ? options.preservePendingSeat : null);
-          if (!seatStillAvailable) {
-            setPendingFareQuote(null);
-          }
         }
       } catch (error) {
         setSeatLoadState('error');
@@ -255,51 +242,6 @@ export default function BookSeatPage() {
 
     bootstrap();
   }, []);
-
-  useEffect(() => {
-    if (!pendingSeat || !selectedSchedule || !selectedCoach || !originId || !destinationId) {
-      setPendingFareQuote(null);
-      setFareQuoteError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingFareQuote(true);
-    setFareQuoteError(null);
-
-    quoteFareApi({
-      schedule_id: selectedSchedule.schedule_id,
-      origin_station_id: originId,
-      destination_station_id: destinationId,
-      coach_class: selectedCoach.coach_class,
-    })
-      .then((quote) => {
-        if (!cancelled) {
-          setPendingFareQuote(quote);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setPendingFareQuote(null);
-          setFareQuoteError(getApiErrorMessage(error, 'Could not load fare quote.'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoadingFareQuote(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    destinationId,
-    originId,
-    pendingSeat,
-    selectedCoach,
-    selectedSchedule,
-  ]);
 
   useEffect(() => {
     if (!seatMapVisible || seatLoadState !== 'success') {
@@ -450,7 +392,6 @@ export default function BookSeatPage() {
       if (!seatStillAvailable) {
         setLostSeatNumber(pendingSeat);
         setPendingSeat(null);
-        setPendingFareQuote(null);
         setHoldError('This seat was taken before the hold could start. Pick another seat.');
         await refreshSeatMap(true);
         return;
@@ -469,17 +410,18 @@ export default function BookSeatPage() {
         coachId: holdResponse.coach_id,
         seatNumber: holdResponse.seat_number,
         coachIdentifier: selectedCoach.identifier,
+        coachClass: selectedCoach.coach_class,
         expiresAt: holdResponse.expires_at,
-        fareQuote: holdResponse.fare_quote,
       };
 
       setActiveHold(nextHold);
       setPaymentSession({
         hold: nextHold,
         schedule: selectedSchedule,
+        originId,
+        destinationId,
       });
       setPendingSeat(null);
-      setPendingFareQuote(null);
       setLostSeatNumber(null);
       setHoldError(null);
       await refreshSeatMap(true);
@@ -490,7 +432,6 @@ export default function BookSeatPage() {
       if (axios.isAxiosError(error) && error.response?.status === 409) {
         setLostSeatNumber(pendingSeat);
         setPendingSeat(null);
-        setPendingFareQuote(null);
         await refreshSeatMap(true);
       }
     } finally {
@@ -506,6 +447,8 @@ export default function BookSeatPage() {
     setPaymentSession({
       hold: activeHold,
       schedule: selectedSchedule,
+      originId,
+      destinationId,
     });
     setIsPaymentModalOpen(true);
   };
@@ -544,7 +487,12 @@ export default function BookSeatPage() {
         <PaymentModal
           isOpen={isPaymentModalOpen}
           holdId={paymentSession.hold.holdId}
-          fareQuote={paymentSession.hold.fareQuote}
+          quoteParams={{
+            schedule_id: paymentSession.schedule.schedule_id,
+            origin_station_id: paymentSession.originId,
+            destination_station_id: paymentSession.destinationId,
+            coach_class: paymentSession.hold.coachClass,
+          }}
           journey={{
             trainName: paymentSession.schedule.train.name,
             trainNumber: paymentSession.schedule.train.train_number,
@@ -603,72 +551,54 @@ export default function BookSeatPage() {
             </div>
           </div>
 
-          <form
-            onSubmit={handleSearch}
-            className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-700">Origin Station</label>
-              <div className="relative flex items-center">
-                <MapPin className="pointer-events-none absolute left-3.5 h-4 w-4 text-indigo-600" />
-                <select
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white disabled:opacity-60"
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Origin Station</label>
+                <StationCombobox
+                  stations={sortedStations}
                   value={originId}
-                  onChange={(event) => handleOriginChange(event.target.value)}
+                  onChange={handleOriginChange}
+                  placeholder="Type to search origin"
                   disabled={isBootstrapping}
-                >
-                  <option value="">Select origin</option>
-                  {sortedStations.map((station) => (
-                    <option key={station.id} value={station.id}>
-                      {station.name} ({station.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <label className="text-xs font-semibold text-slate-700">Destination Station</label>
-              <div className="relative flex items-center">
-                <MapPin className="pointer-events-none absolute left-3.5 h-4 w-4 text-emerald-600" />
-                <select
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white disabled:opacity-60"
-                  value={destinationId}
-                  onChange={(event) => handleDestinationChange(event.target.value)}
-                  disabled={isBootstrapping || !originId}
-                >
-                  <option value="">
-                    {!originId ? 'Select origin first' : 'Select destination'}
-                  </option>
-                  {destinationStationOptions.map((station) => (
-                    <option key={station.id} value={station.id}>
-                      {station.name} ({station.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
-              <label className="text-xs font-semibold text-slate-700">Travel Date</label>
-              <div className="relative flex items-center">
-                <Calendar className="pointer-events-none absolute left-3.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="date"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white"
-                  value={travelDate}
-                  onChange={(event) => setTravelDate(event.target.value)}
+                  iconClassName="text-indigo-600"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Destination Station</label>
+                <StationCombobox
+                  stations={sortedStations}
+                  value={destinationId}
+                  onChange={handleDestinationChange}
+                  placeholder={originId ? 'Type to search destination' : 'Select origin first'}
+                  disabled={isBootstrapping || !originId}
+                  excludeStationId={originId}
+                  iconClassName="text-emerald-600"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-700">Travel Date</label>
+                <div className="relative flex items-center">
+                  <Calendar className="pointer-events-none absolute left-3.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white"
+                    value={travelDate}
+                    onChange={(event) => setTravelDate(event.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
             {searchError && (
-              <div className="sm:col-span-2 lg:col-span-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                 {searchError}
               </div>
             )}
 
-            <div className="flex items-end sm:col-span-2 lg:col-span-4 lg:justify-end">
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={isSearching || isBootstrapping || Boolean(bootstrapError)}
@@ -713,8 +643,7 @@ export default function BookSeatPage() {
                   <h2 className="text-lg font-bold text-slate-900">Reserved Coach Seats</h2>
                   {selectedSchedule ? (
                     <p className="mt-1 text-xs text-slate-500">
-                      {selectedSchedule.train.name} (#{selectedSchedule.train.train_number}) •{' '}
-                      {originLabel} → {destinationLabel}
+                      {selectedSchedule.train.name} • {originLabel} → {destinationLabel}
                     </p>
                   ) : (
                     <p className="mt-1 text-xs text-slate-500">
@@ -787,8 +716,6 @@ export default function BookSeatPage() {
                         onSelect={(coachId) => {
                           setSelectedCoachId(coachId);
                           setPendingSeat(null);
-                          setPendingFareQuote(null);
-                          setFareQuoteError(null);
                         }}
                         disabled={isMapInteractionDisabled}
                       />
@@ -818,22 +745,6 @@ export default function BookSeatPage() {
                     <p className="font-semibold">
                       Seat {pendingSeat} selected on coach {selectedCoach?.identifier ?? '—'}
                     </p>
-                    {isLoadingFareQuote && (
-                      <p className="mt-2 flex items-center gap-2 text-indigo-800">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        Loading fare quote...
-                      </p>
-                    )}
-                    {fareQuoteError && (
-                      <p className="mt-2 text-rose-700">{fareQuoteError}</p>
-                    )}
-                    {pendingFareQuote && !isLoadingFareQuote && (
-                      <p className="mt-2 text-indigo-800">
-                        Estimated fare: {pendingFareQuote.currency}{' '}
-                        {pendingFareQuote.fare_amount.toFixed(2)} ({pendingFareQuote.distance_km} km,{' '}
-                        {pendingFareQuote.time_band})
-                      </p>
-                    )}
                     <p className="mt-2 text-xs text-indigo-700">
                       Confirm below to start the 10-minute hold timer.
                     </p>
@@ -870,8 +781,7 @@ export default function BookSeatPage() {
                       !selectedCoach ||
                       isHoldingSeat ||
                       isRefreshingSeats ||
-                      Boolean(activeHold) ||
-                      isLoadingFareQuote
+                      Boolean(activeHold)
                     }
                     className="rounded-xl bg-indigo-600 px-6 py-3 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
                   >

@@ -39,28 +39,21 @@ export function CoachSelector({
             type="button"
             disabled={disabled}
             onClick={() => onSelect(coach.coach_id)}
-            className={`rounded-xl border px-3 py-2.5 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`min-w-[9.5rem] rounded-xl border px-4 py-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
               isSelected
                 ? 'border-indigo-600 bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-400'
             }`}
           >
-            <span className="block text-xs font-bold">
-              Coach {coach.identifier}
+            <span className="block text-sm font-bold leading-tight">
+              {coachClassLabel(coach.coach_class)}
             </span>
             <span
-              className={`mt-0.5 block text-[10px] font-semibold ${
-                isSelected ? 'text-indigo-100' : 'text-indigo-600'
+              className={`mt-2 block text-xs font-semibold ${
+                isSelected ? 'text-indigo-100' : 'text-emerald-600'
               }`}
             >
-              {coachClassLabel(coach.coach_class)} • {coach.seat_configuration} layout
-            </span>
-            <span
-              className={`mt-1 block text-[10px] ${
-                isSelected ? 'text-indigo-100/90' : 'text-slate-500'
-              }`}
-            >
-              {coach.available_seats_count}/{coach.seat_count} seats available
+              {coach.available_seats_count} seat{coach.available_seats_count === 1 ? '' : 's'} available
             </span>
           </button>
         );
