@@ -197,13 +197,38 @@ export interface BookingTicket {
     coach_identifier: string;
     seat_number: number;
     is_reserved_class: boolean;
+    coach_class: string;
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MyBookingsResponse {
+  total: number;
+  bookings: BookingTicket[];
 }
 
 export interface SearchSchedulesParams {
   date: string;
   origin_id: string;
   destination_id: string;
+}
+
+export interface PassengerProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  nic_number: string | null;
+  mobile_number: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdatePassengerProfilePayload {
+  name?: string;
+  nic_number?: string;
+  mobile_number?: string;
+  current_password?: string;
+  new_password?: string;
 }

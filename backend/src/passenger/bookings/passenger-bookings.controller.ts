@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UnauthorizedException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PassengerBookingService } from './passenger-bookings.service';
 import { HoldSeatDto } from '../dto/hold-seat.dto';
@@ -66,6 +66,28 @@ export class PassengerBookingController {
     @CurrentUser('id') userId?: string,
   ) {
     return this.bookingService.confirmBooking(dto, userId);
+  }
+
+  /**
+   * GET /api/v1/bookings/me
+   * List confirmed bookings for the signed-in passenger
+   */
+  @Get('me')
+  @ApiOperation({
+    summary: 'List my confirmed bookings',
+    description: 'Returns confirmed seat bookings linked to the authenticated passenger account or email.',
+  })
+  @ApiResponse({ status: 200, description: 'Passenger bookings returned.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - sign in required.' })
+  async listMyBookings(
+    @CurrentUser('id') userId?: string,
+    @CurrentUser('email') userEmail?: string,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('Sign in to view your bookings.');
+    }
+
+    return this.bookingService.listUserBookings(userId, userEmail);
   }
 
   /**

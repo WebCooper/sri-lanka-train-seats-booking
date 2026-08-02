@@ -9,6 +9,8 @@ import { PassengerLineController } from './lines/passenger-lines.controller';
 import { PassengerLineService } from './lines/passenger-lines.service';
 import { PassengerTrainController } from './trains/passenger-trains.controller';
 import { PassengerTrainService } from './trains/passenger-trains.service';
+import { PassengerProfileController } from './profile/passenger-profile.controller';
+import { PassengerProfileService } from './profile/passenger-profile.service';
 import { FareCalculationService } from '../common/fare-calculation.service';
 
 import { SegmentAllocationService } from '../common/segment-allocation.service';
@@ -20,6 +22,7 @@ import { SegmentAllocationService } from '../common/segment-allocation.service';
     PassengerTrainController,
     PassengerScheduleController,
     PassengerBookingController,
+    PassengerProfileController,
   ],
   providers: [
     PassengerStationService,
@@ -27,6 +30,7 @@ import { SegmentAllocationService } from '../common/segment-allocation.service';
     PassengerTrainService,
     PassengerScheduleService,
     PassengerBookingService,
+    PassengerProfileService,
     FareCalculationService,
     SegmentAllocationService,
   ],

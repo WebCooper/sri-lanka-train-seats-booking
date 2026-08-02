@@ -267,6 +267,30 @@ export class PassengerBookingService {
   }
 
   /**
+   * List confirmed bookings for a passenger (by account id or booking email).
+   */
+  async listUserBookings(userId: string, userEmail?: string) {
+    const email = userEmail?.trim().toLowerCase();
+
+    const bookings = await prisma.seatSegmentAllocation.findMany({
+      where: {
+        status: ALLOCATION_STATUS.CONFIRMED,
+        OR: [
+          { userId },
+          ...(email ? [{ passengerEmail: email }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: this.allocationInclude(),
+    });
+
+    return {
+      total: bookings.length,
+      bookings: bookings.map((booking) => this.formatTicketResponse(booking)),
+    };
+  }
+
+  /**
    * Retrieve confirmed ticket details by allocation ID or PNR reference
    */
   async getBookingDetails(idOrRef: string) {
@@ -334,7 +358,7 @@ export class PassengerBookingService {
       train: { name: string; trainNumber: string };
       line: { name: string };
     };
-    coach: { identifier: string; isReserved: boolean };
+    coach: { identifier: string; isReserved: boolean; coachClass: string };
     originStation: { id: string; name: string; code: string };
     destinationStation: { id: string; name: string; code: string };
   }) {
@@ -371,6 +395,7 @@ export class PassengerBookingService {
         coach_identifier: allocation.coach.identifier,
         seat_number: allocation.seatNumber,
         is_reserved_class: allocation.coach.isReserved,
+        coach_class: allocation.coach.coachClass,
       },
       createdAt: allocation.createdAt,
       updatedAt: allocation.updatedAt,

@@ -7,12 +7,15 @@ import type {
   HoldSeatPayload,
   HoldSeatResponse,
   Line,
+  MyBookingsResponse,
+  PassengerProfile,
   SearchSchedulesParams,
   SearchSchedulesResponse,
   SeatAvailabilityResponse,
   Station,
   Train,
   UpcomingSchedulesResponse,
+  UpdatePassengerProfilePayload,
 } from '../types/passenger';
 
 export const fetchStationsApi = async (): Promise<Station[]> => {
@@ -74,6 +77,23 @@ export const confirmBookingApi = async (
   payload: ConfirmBookingPayload,
 ): Promise<BookingTicket> => {
   const response = await axiosInstance.post<BookingTicket>('/api/v1/bookings', payload);
+  return response.data;
+};
+
+export const fetchMyBookingsApi = async (): Promise<MyBookingsResponse> => {
+  const response = await axiosInstance.get<MyBookingsResponse>('/api/v1/bookings/me');
+  return response.data;
+};
+
+export const fetchPassengerProfileApi = async (): Promise<PassengerProfile> => {
+  const response = await axiosInstance.get<PassengerProfile>('/api/v1/profile/me');
+  return response.data;
+};
+
+export const updatePassengerProfileApi = async (
+  payload: UpdatePassengerProfilePayload,
+): Promise<PassengerProfile> => {
+  const response = await axiosInstance.patch<PassengerProfile>('/api/v1/profile/me', payload);
   return response.data;
 };
 

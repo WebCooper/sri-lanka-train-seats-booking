@@ -23,6 +23,9 @@ export interface SignUpPayload {
   name: string;
   email: string;
   password: string;
+  title?: string;
+  first_name?: string;
+  last_name?: string;
   nic_number?: string;
   mobile_number?: string;
 }
@@ -92,12 +95,12 @@ export const PassengerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         email: payload.email.trim(),
         password: payload.password.trim(),
         name: payload.name.trim(),
-        data: {
-          nicNumber: payload.nic_number?.trim() || undefined,
-          mobileNumber: payload.mobile_number?.trim() || undefined,
-          role: 'passenger',
-        },
-      } as any);
+        title: payload.title,
+        firstName: payload.first_name?.trim(),
+        lastName: payload.last_name?.trim(),
+        nicNumber: payload.nic_number?.trim().toUpperCase() || undefined,
+        mobileNumber: payload.mobile_number?.trim() || undefined,
+      } as Parameters<typeof authClient.signUp.email>[0]);
 
       if (error) {
         const errorMsg = error.message || 'Failed to create account.';
