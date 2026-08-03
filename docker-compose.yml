@@ -4,18 +4,39 @@ services:
     container_name: train-booking-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-trainbooking}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trainbooking}
-      POSTGRES_DB: ${POSTGRES_DB:-train_booking}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trainbooking} -d ${POSTGRES_DB:-train_booking}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder
+    container_name: train-booking-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    volumes:
+      - ./backend/sql:/app/sql:ro
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npx prisma db execute --file sql/dbeaver-seat-segment-allocation.sql"
+    restart: "no"
 
   backend:
     build:
@@ -26,45 +47,50 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-trainbooking}:${POSTGRES_PASSWORD:-trainbooking}@postgres:5432/${POSTGRES_DB:-train_booking}?schema=public
-      PORT: 3001
-      NODE_ENV: production
-      FARE_RATE_PER_KM_CENTS: ${FARE_RATE_PER_KM_CENTS:-250}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-to-a-long-random-secret-at-least-32-chars}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
-      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      PORT: ${PORT}
+      NODE_ENV: ${NODE_ENV}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS}
     ports:
-      - "3001:3001"
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
-    container_name: train-booking-web
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - "${PORT}:${PORT}"
 
   admin:
     build:
       context: ./admin
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+        VITE_API_URL: ${VITE_API_BASE_URL}
     container_name: train-booking-admin
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     ports:
-      - "5173:80"
+      - "${ADMIN_PORT}:80"
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    container_name: train-booking-web
+    restart: unless-stopped
+    depends_on:
+      admin:
+        condition: service_started
+    environment:
+      PORT: ${WEB_PORT}
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
 volumes:
   postgres_data:
+

@@ -11,12 +11,14 @@ RUN npm ci
 
 COPY prisma ./prisma
 COPY prisma.config.ts ./
+COPY sql ./sql
 
 RUN npx prisma generate
 
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY lib ./lib
+COPY stations-with-cumulative-distances.csv ./
 
 RUN npm run build
 

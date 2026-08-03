@@ -2,12 +2,53 @@ import 'dotenv/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { prisma } from '../lib/prisma';
+import { auth } from '../src/auth/auth';
 import {
   DEFAULT_COACH_CLASS_MULTIPLIERS,
   DEFAULT_FARE_SETTINGS,
   FARE_SETTINGS_ID,
   defaultCoachClassMultipliers,
 } from '../src/common/fare.util';
+
+// Ordered Colombo Fort -> Badulla stations for the "Main Line".
+// Note: the source dataset spells Nawalapitiya as "Navalapitiya".
+const MAIN_LINE_STATIONS = [
+  'Colombo Fort',
+  'Gampaha',
+  'Polgahawela',
+  'Peradeniya Jnc',
+  'Kandy',
+  'Gampola',
+  'Navalapitiya',
+  'Hatton',
+  'Nanuoya',
+  'Haputale',
+  'Bandarawela',
+  'Ella',
+  'Badulla',
+];
+
+interface DemoUserSeed {
+  email: string;
+  password: string;
+  name: string;
+  role: 'admin' | 'passenger';
+}
+
+const DEMO_USERS: DemoUserSeed[] = [
+  {
+    email: 'admin@trainbooking.lk',
+    password: 'Admin123!',
+    name: 'System Administrator',
+    role: 'admin',
+  },
+  {
+    email: 'passenger@example.com',
+    password: 'Passenger123!',
+    name: 'Demo Passenger',
+    role: 'passenger',
+  },
+];
 
 // Well-known Sri Lankan Railway station codes mapping
 const KNOWN_CODES: Record<string, string> = {
@@ -88,36 +129,73 @@ function generateCode(name: string, usedCodes: Set<string>): string {
   return code;
 }
 
-async function main() {
-  console.log('🌱 Seeding Sri Lanka Railway Stations...');
+/**
+ * Parse a single CSV line into fields, honoring double-quoted fields
+ * that may contain commas or escaped quotes ("").
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
 
-  const filePath = path.join(__dirname, '../stations-with-cumulative-distances.md');
-  if (!fs.existsSync(filePath)) {
-    console.error('❌ Station markdown file not found at:', filePath);
-    return;
-  }
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-
-  // Parse markdown rows matching "| Station Name | Cumulative Distance (Km) |"
-  const regex = /\|\s*([^|\n]+?)\s*\|\s*([\d.]+)\s*/g;
-  let match;
-  const stations: Array<{ name: string; distance: number }> = [];
-
-  while ((match = regex.exec(content)) !== null) {
-    const rawName = match[1].trim();
-    const rawDist = parseFloat(match[2]);
-
-    if (rawName && !isNaN(rawDist) && rawName !== 'Station Name' && !rawName.includes('---')) {
-      const cleanName = rawName.replace(/\.+$/, '').trim();
-      stations.push({
-        name: cleanName,
-        distance: rawDist,
-      });
+    if (inQuotes) {
+      if (char === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      fields.push(current);
+      current = '';
+    } else {
+      current += char;
     }
   }
 
-  console.log(`📍 Parsed ${stations.length} stations from markdown.`);
+  fields.push(current);
+  return fields;
+}
+
+function parseStationsCsv(filePath: string): Array<{ name: string; distance: number }> {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
+
+  // First line is the header: name,cumulative_distance_km
+  const [, ...rows] = lines;
+  const stations: Array<{ name: string; distance: number }> = [];
+
+  for (const row of rows) {
+    const [rawName, rawDist] = parseCsvLine(row);
+    const name = rawName?.trim();
+    const distance = parseFloat(rawDist);
+
+    if (name && !isNaN(distance)) {
+      stations.push({ name, distance });
+    }
+  }
+
+  return stations;
+}
+
+async function main() {
+  console.log('🌱 Seeding Sri Lanka Railway Stations...');
+
+  const filePath = path.join(__dirname, '../stations-with-cumulative-distances.csv');
+  if (!fs.existsSync(filePath)) {
+    console.error('❌ Station CSV file not found at:', filePath);
+    return;
+  }
+
+  const stations = parseStationsCsv(filePath);
+  console.log(`📍 Parsed ${stations.length} stations from CSV.`);
 
   const usedCodes = new Set<string>();
   let insertedCount = 0;
@@ -144,6 +222,98 @@ async function main() {
   console.log(`✅ Successfully seeded/updated ${insertedCount} stations in the database.`);
 
   await seedFareModel();
+  await seedMainLine();
+  await seedUsers();
+}
+
+/**
+ * Create the "Main Line" (Colombo Fort -> Badulla) with its ordered
+ * intermediate stations, re-linking stations if the line already exists.
+ */
+async function seedMainLine() {
+  console.log('🚆 Seeding "Main Line" (Colombo Fort → Badulla)...');
+
+  const stationRows = await prisma.station.findMany({
+    where: { name: { in: MAIN_LINE_STATIONS } },
+  });
+  const byName = new Map(stationRows.map((s) => [s.name, s]));
+
+  const missing = MAIN_LINE_STATIONS.filter((name) => !byName.has(name));
+  if (missing.length > 0) {
+    console.error(`❌ Cannot seed "Main Line", missing stations: ${missing.join(', ')}`);
+    return;
+  }
+
+  const startStation = byName.get(MAIN_LINE_STATIONS[0])!;
+  const endStation = byName.get(MAIN_LINE_STATIONS[MAIN_LINE_STATIONS.length - 1])!;
+  const intermediateNames = MAIN_LINE_STATIONS.slice(1, -1);
+
+  const existingLine = await prisma.line.findFirst({ where: { name: 'Main Line' } });
+
+  const line = existingLine
+    ? await prisma.line.update({
+        where: { id: existingLine.id },
+        data: { startStationId: startStation.id, endStationId: endStation.id },
+      })
+    : await prisma.line.create({
+        data: {
+          name: 'Main Line',
+          startStationId: startStation.id,
+          endStationId: endStation.id,
+        },
+      });
+
+  await prisma.lineStation.deleteMany({ where: { lineId: line.id } });
+  await prisma.lineStation.createMany({
+    data: intermediateNames.map((name, index) => {
+      const station = byName.get(name)!;
+      return {
+        lineId: line.id,
+        stationId: station.id,
+        position: index,
+        distanceFromStart: station.cumulativeDistance - startStation.cumulativeDistance,
+      };
+    }),
+  });
+
+  console.log(`✅ "Main Line" seeded with ${intermediateNames.length} intermediate stations.`);
+}
+
+/**
+ * Create demo admin + passenger accounts through Better Auth's own sign-up
+ * flow so the stored password hash matches what the login endpoint expects.
+ */
+async function seedUsers() {
+  console.log('👤 Seeding demo users...');
+
+  for (const demo of DEMO_USERS) {
+    const existing = await prisma.user.findUnique({ where: { email: demo.email } });
+
+    if (existing) {
+      if (existing.role !== demo.role) {
+        await prisma.user.update({ where: { id: existing.id }, data: { role: demo.role } });
+      }
+      console.log(`   ↳ ${demo.email} already exists, skipping creation.`);
+      continue;
+    }
+
+    const created = await auth.api.signUpEmail({
+      body: {
+        name: demo.name,
+        email: demo.email,
+        password: demo.password,
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: created.user.id },
+      data: { role: demo.role, emailVerified: true },
+    });
+
+    console.log(`   ↳ created ${demo.role} user ${demo.email}`);
+  }
+
+  console.log('✅ Demo users seeded.');
 }
 
 async function seedFareModel() {
