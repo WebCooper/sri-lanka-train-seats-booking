@@ -8,6 +8,7 @@ import { AdminManagement } from './pages/AdminManagement';
 import { TrainManagement } from './pages/TrainManagement';
 import { ScheduleManagement } from './pages/ScheduleManagement';
 import { FareModelManagement } from './pages/FareModelManagement';
+import { RevenueAnalytics } from './pages/RevenueAnalytics';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import './index.css';
@@ -98,6 +99,7 @@ export function App() {
             <Route path="train-management" element={<TrainManagement />} />
             <Route path="schedule-management" element={<ScheduleManagement />} />
             <Route path="fare-model" element={<FareModelManagement />} />
+            <Route path="analytics" element={<RevenueAnalytics />} />
           </Route>
 
           {/* Fallback Redirect */}
