@@ -7,6 +7,7 @@ import { LineModule } from './line/line.module';
 import { TrainModule } from './train/train.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { FareModule } from './fare/fare.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { FareModule } from './fare/fare.module';
     TrainModule,
     ScheduleModule,
     FareModule,
+    ReportsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],
