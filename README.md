@@ -13,17 +13,34 @@ A production-minded booking system for Sri Lanka’s scenic Colombo Fort–Badul
 
 ## Quick start
 
+From a clean machine with only **Docker** installed:
+
 ```bash
-cp .env.example .env
+git clone <repo-url>
+cd Train-Booking-Sri-Lanka
+cp .env.example .env          # then set BETTER_AUTH_SECRET (any long random string)
 docker compose up --build
 ```
+
+That single command is fully self-contained:
+
+1. **postgres** starts and becomes healthy.
+2. **migrate** (one-shot) runs `prisma migrate deploy` to create all tables, then seeds
+   stations and the fare model, and exits.
+3. **backend**, **admin**, and **web** start only after the migration/seed completes.
+
+No manual `prisma migrate` / `prisma db push` step is required — it happens inside the
+compose run.
 
 | Service | URL |
 |---------|-----|
 | Public web | http://localhost:3000 |
 | Admin | http://localhost:5173 |
-| API | http://localhost:3001 |
-| Auth | http://localhost:3001/api/auth/* |
+| API | http://localhost:5000 |
+| Auth | http://localhost:5000/api/auth/* |
+
+> The only value you must set by hand in `.env` is `BETTER_AUTH_SECRET`. Everything else
+> has working defaults for local Docker.
 
 **Demo accounts** (seeded):
 
