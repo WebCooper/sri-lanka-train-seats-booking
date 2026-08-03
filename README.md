@@ -64,4 +64,19 @@ for concurrency
 for pricing
 5. (flat booking fee + distance based charge(rs per/km)) * coach class charge * peak/offpeak charge
 
+## Admin revenue APIs
+
+**Problem:** Admins need live financial visibility from segment-based bookings — not static reports.
+
+**Solution:** Five read-only endpoints under `/api/v1/admin/reports/revenue/*`. All aggregate `fareAmount` from `CONFIRMED` `SeatSegmentAllocation` rows. Admin auth required (`@AdminOnly` + `AuthGuard` + `RolesGuard`).
+
+**Design:** One shared filter DTO (`date_from`, `date_to`, `line_id`, `schedule_id`, `train_id`). Each endpoint answers one chart/KPI. Revenue source is always confirmed segment fares — no separate booking table.
+
+| Endpoint | What it shows |
+|----------|---------------|
+| `GET .../summary` | Gross revenue, booking count, average fare |
+| `GET .../over-time?granularity=daily\|weekly\|monthly` | Revenue trend by `createdAt` bucket |
+| `GET .../by-schedule` | Top train runs by total fare |
+| `GET .../by-coach-class` | Revenue split across FIRST / SECOND / THIRD / OBSERVATION |
+| `GET .../segment-efficiency` | Seats sold multiple times on one run — proves segment pricing upside |
 
