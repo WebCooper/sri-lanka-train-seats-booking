@@ -173,7 +173,8 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** Before starting a hold, the client refreshes availability. If the seat is gone, it shows a **lost** state on the map and an error message. While a hold is active, a countdown timer runs. On expiry the hold clears and the map refreshes. Background polling and focus-based refresh keep availability close to real time without WebSockets.
 
-![UI improvement for conflictless booking](figures\seat-booking.jpeg)
+![UI improvement for conflictless booking](figures\seat-booking.png)
+& 
 ![Handled conflict when same time hold triggers](figures\seat-booking-conflict-handling.png)
 
 ### 4. Passenger booking history
