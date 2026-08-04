@@ -5,90 +5,15 @@ import Link from 'next/link';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { UpcomingTrainsSection } from '../components/UpcomingTrainsSection';
-import { Train, Ticket, ShieldCheck, Clock, MapPin, ArrowRight, Search, CheckCircle2 } from 'lucide-react';
+import { HeroSection } from '../components/HeroSection';
+import { Train, Ticket, ShieldCheck, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Navbar />
 
-      {/* Hero Section */}
-      <section className="relative bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 text-white pt-20 pb-28 px-6 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-transparent pointer-events-none" />
-        
-        <div className="max-w-6xl mx-auto text-center relative z-10">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-6 animate-in fade-in">
-            <Train className="w-4 h-4 text-indigo-400" />
-            Official Sri Lanka Railways Online Seat Booking Portal
-          </span>
-
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-tight text-white">
-            Discover Sri Lanka by Rail with <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-indigo-300 via-sky-300 to-emerald-300 bg-clip-text text-transparent">
-              Instant Online Seat Reservations
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg text-slate-300 max-w-3xl mx-auto mb-10 leading-relaxed">
-            Reserve 1st Class, 2nd Class, and Observation Car seats on express trains across Sri Lanka. Seamless e-tickets, transparent pricing, and instant seat confirmation.
-          </p>
-
-          {/* Call to Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mb-16">
-            <Link
-              href="/register"
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-7 py-3.5 rounded-2xl font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-105"
-            >
-              <span>Create Passenger Account</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-
-            <Link
-              href="/login"
-              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 px-7 py-3.5 rounded-2xl font-bold text-sm backdrop-blur-md transition-all"
-            >
-              <span>Passenger Sign In</span>
-            </Link>
-          </div>
-
-          {/* Search Callout Box */}
-          <div className="max-w-4xl mx-auto bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-3xl shadow-2xl text-left">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1.5 block">From Station</label>
-                <div className="flex items-center gap-2 bg-white text-slate-900 px-4 py-3 rounded-xl">
-                  <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="text-sm font-semibold">Colombo Fort (FOT)</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1.5 block">To Station</label>
-                <div className="flex items-center gap-2 bg-white text-slate-900 px-4 py-3 rounded-xl">
-                  <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="text-sm font-semibold">Badulla (BDA)</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Travel Date</label>
-                <div className="flex items-center gap-2 bg-white text-slate-900 px-4 py-3 rounded-xl">
-                  <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span className="text-sm font-semibold">Tomorrow Express</span>
-                </div>
-              </div>
-            </div>
-
-            <Link
-              href="/register"
-              className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-3.5 rounded-xl font-bold text-sm shadow-md transition-all"
-            >
-              <Search className="w-4 h-4" />
-              <span>Search Available Trains & Reserve Seats</span>
-            </Link>
-          </div>
-        </div>
-      </section>
+      <HeroSection />
 
       <UpcomingTrainsSection />
 

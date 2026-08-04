@@ -7,6 +7,7 @@ import { Navbar } from '../../components/Navbar';
 import { Footer } from '../../components/Footer';
 import { Train, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { usePassengerAuth } from '../../context/PassengerAuthContext';
+import { HERO_SEARCH_STORAGE_KEY } from '../../components/HeroSearchBar';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -34,7 +35,8 @@ export default function LoginPage() {
       });
 
       if (res.success) {
-        router.push('/dashboard');
+        const pendingHeroSearch = sessionStorage.getItem(HERO_SEARCH_STORAGE_KEY);
+        router.push(pendingHeroSearch ? '/dashboard/book-seat' : '/dashboard');
       }
     } finally {
       setIsSubmitting(false);

@@ -34,7 +34,7 @@ export function UpcomingTrainsSection() {
   }, []);
 
   return (
-    <section className="relative w-full bg-slate-50 px-6 py-20">
+    <section className="relative z-10 w-full bg-slate-50 px-6 py-20">
       <div className="mx-auto max-w-7xl">
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>

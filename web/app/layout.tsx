@@ -3,9 +3,69 @@ import { PassengerAuthProvider } from "../context/PassengerAuthContext";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
+const siteName = "Sri Lanka Railways";
+const siteDescription =
+  "The official online platform for Sri Lanka Railways. Book train seats, view schedules, and manage e-tickets for travel across Sri Lanka.";
+
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
 export const metadata: Metadata = {
-  title: "Sri Lanka Railways - Online Seat Booking Portal",
-  description: "Official online seat reservation portal for Sri Lanka Railways express trains.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: `${siteName} | Online Seat Booking Portal`,
+    template: `%s | ${siteName}`,
+  },
+  description: siteDescription,
+  keywords: [
+    "Sri Lanka Railways",
+    "SLR",
+    "train schedule Sri Lanka",
+    "railway transport",
+    "Sri Lanka travel",
+    "train booking",
+    "online seat reservation",
+    "e-ticket Sri Lanka",
+  ],
+  applicationName: siteName,
+  authors: [{ name: siteName }],
+  creator: siteName,
+  publisher: siteName,
+  category: "travel",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-96x96.png", sizes: "96x96", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/site.webmanifest",
+  openGraph: {
+    type: "website",
+    locale: "en_LK",
+    siteName,
+    title: `${siteName} | Online Seat Booking Portal`,
+    description: siteDescription,
+    images: [
+      {
+        url: "/logo.png",
+        width: 622,
+        height: 401,
+        alt: "Sri Lanka Railways logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${siteName} | Online Seat Booking Portal`,
+    description: siteDescription,
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
