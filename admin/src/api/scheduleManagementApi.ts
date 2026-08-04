@@ -48,6 +48,26 @@ export interface CreateSchedulePayload {
   arrival_time: string;
 }
 
+export interface BulkCreateSchedulePayload {
+  line_id: string;
+  train_id: string;
+  sessions: Array<{
+    departure_time: string;
+    arrival_time: string;
+  }>;
+}
+
+export interface BulkCreateScheduleResult {
+  created: ScheduleItem[];
+  skipped: Array<{
+    departure_time: string;
+    arrival_time: string;
+    reason: string;
+  }>;
+  total_created: number;
+  total_skipped: number;
+}
+
 export interface UpdateSchedulePayload {
   line_id?: string;
   train_id?: string;
@@ -84,6 +104,16 @@ export const fetchScheduleByIdApi = async (id: string): Promise<ScheduleItem> =>
 
 export const createScheduleApi = async (payload: CreateSchedulePayload): Promise<ScheduleItem> => {
   const response = await axiosInstance.post<ScheduleItem>('/api/v1/admin/schedules', payload);
+  return response.data;
+};
+
+export const createBulkSchedulesApi = async (
+  payload: BulkCreateSchedulePayload,
+): Promise<BulkCreateScheduleResult> => {
+  const response = await axiosInstance.post<BulkCreateScheduleResult>(
+    '/api/v1/admin/schedules/bulk',
+    payload,
+  );
   return response.data;
 };
 

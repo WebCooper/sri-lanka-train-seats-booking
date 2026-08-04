@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ScheduleService } from './schedule.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { BulkCreateScheduleDto } from './dto/bulk-create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { QueryScheduleDto } from './dto/query-schedule.dto';
 import { AdminOnly, AuthGuard, RolesGuard } from '../../auth';
@@ -56,6 +57,19 @@ export class AdminScheduleController {
   @ApiResponse({ status: 409, description: 'Conflict - Train has an overlapping schedule.' })
   async createSchedule(@Body() dto: CreateScheduleDto) {
     return this.scheduleService.createSchedule(dto);
+  }
+
+  /**
+   * POST /api/v1/admin/schedules/bulk
+   * Schedule multiple train sessions at once
+   */
+  @Post('bulk')
+  @ApiOperation({ summary: 'Schedule multiple train sessions at once' })
+  @ApiResponse({ status: 201, description: 'Bulk schedule result returned.' })
+  @ApiResponse({ status: 400, description: 'Bad Request - Invalid session times.' })
+  @ApiResponse({ status: 404, description: 'Not Found - Line ID or Train ID not found.' })
+  async createBulkSchedules(@Body() dto: BulkCreateScheduleDto) {
+    return this.scheduleService.createBulkSchedules(dto);
   }
 
   /**
