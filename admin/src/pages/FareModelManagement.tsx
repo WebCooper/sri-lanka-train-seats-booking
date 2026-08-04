@@ -19,6 +19,7 @@ import {
   quoteFareApi,
   updateFareModelApi,
   type FareModelConfig,
+  type FareQuoteResult,
   type PeakHourRule,
 } from '../api/fareModelApi';
 import { fetchAllStationsApi, fetchLinesApi } from '../api/trainManagementApi';
@@ -64,7 +65,7 @@ export const FareModelManagement: React.FC = () => {
   const [quoteDestinationId, setQuoteDestinationId] = useState('');
   const [quoteCoachClass, setQuoteCoachClass] = useState('FIRST');
   const [quoteDepartureTime, setQuoteDepartureTime] = useState('');
-  const [quoteResult, setQuoteResult] = useState<string | null>(null);
+  const [quoteResult, setQuoteResult] = useState<FareQuoteResult | null>(null);
 
   const applyConfig = (config: FareModelConfig) => {
     setFormula(config.formula);
@@ -165,9 +166,7 @@ export const FareModelManagement: React.FC = () => {
         coach_class: quoteCoachClass,
         departure_time: new Date(quoteDepartureTime).toISOString(),
       });
-      setQuoteResult(
-        `LKR ${result.fare_amount.toFixed(2)} (${result.distance_km} km, ${result.time_band}, x${result.coach_class_multiplier} class, x${result.time_multiplier} time)`,
-      );
+      setQuoteResult(result);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to calculate fare quote.'));
     } finally {
@@ -196,7 +195,10 @@ export const FareModelManagement: React.FC = () => {
         <p className="text-sm text-slate-500">
           Configure flat booking fee, per-km rate, coach class multipliers, and peak/off-peak pricing.
         </p>
-        <p className="text-xs text-slate-400 mt-2 font-mono">{formula}</p>
+        <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+          <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-1">Formula</p>
+          <p className="text-sm font-mono text-indigo-900">{formula}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -341,9 +343,37 @@ export const FareModelManagement: React.FC = () => {
           </button>
 
           {quoteResult && (
-            <p className="mt-4 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              {quoteResult}
-            </p>
+            <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Fare Calculation Breakdown</p>
+                <div className="space-y-2 text-sm font-mono">
+                  <div className="flex justify-between text-slate-700">
+                    <span>Flat Booking Fee</span>
+                    <span>LKR {quoteResult.flat_booking_fee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-700">
+                    <span>Distance Charge ({quoteResult.distance_km} km)</span>
+                    <span>LKR {quoteResult.distance_charge.toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-emerald-300 pt-2 flex justify-between text-slate-800 font-semibold">
+                    <span>Base Amount</span>
+                    <span>LKR {quoteResult.base_amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 text-xs">
+                    <span>× Coach Class Multiplier ({COACH_CLASS_LABELS[quoteResult.coach_class]})</span>
+                    <span>x{quoteResult.coach_class_multiplier.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 text-xs">
+                    <span>× Time Multiplier ({quoteResult.time_band === 'peak' ? 'Peak' : 'Off-Peak'})</span>
+                    <span>x{quoteResult.time_multiplier.toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-emerald-300 pt-2 flex justify-between text-emerald-700 font-bold text-base">
+                    <span>Final Fare</span>
+                    <span>LKR {quoteResult.fare_amount.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </section>
       </div>
@@ -382,56 +412,75 @@ export const FareModelManagement: React.FC = () => {
         <div className="border border-dashed border-slate-300 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-slate-800 mb-3">Add peak rule</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <input
-              type="text"
-              placeholder="Rule name"
-              value={newPeakRule.name}
-              onChange={(e) => setNewPeakRule({ ...newPeakRule, name: e.target.value })}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="Multiplier"
-              value={newPeakRule.multiplier}
-              onChange={(e) => setNewPeakRule({ ...newPeakRule, multiplier: e.target.value })}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="time"
-              value={newPeakRule.start_time}
-              onChange={(e) => setNewPeakRule({ ...newPeakRule, start_time: e.target.value })}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="time"
-              value={newPeakRule.end_time}
-              onChange={(e) => setNewPeakRule({ ...newPeakRule, end_time: e.target.value })}
-              className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
-            />
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Rule name</span>
+              <input
+                type="text"
+                name="peak_rule_name"
+                placeholder="e.g. Morning rush"
+                value={newPeakRule.name}
+                onChange={(e) => setNewPeakRule({ ...newPeakRule, name: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Multiplier</span>
+              <input
+                type="number"
+                name="peak_rule_multiplier"
+                min="0.01"
+                step="0.01"
+                placeholder="e.g. 1.25"
+                value={newPeakRule.multiplier}
+                onChange={(e) => setNewPeakRule({ ...newPeakRule, multiplier: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Start time</span>
+              <input
+                type="time"
+                name="peak_rule_start_time"
+                value={newPeakRule.start_time}
+                onChange={(e) => setNewPeakRule({ ...newPeakRule, start_time: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">End time</span>
+              <input
+                type="time"
+                name="peak_rule_end_time"
+                value={newPeakRule.end_time}
+                onChange={(e) => setNewPeakRule({ ...newPeakRule, end_time: e.target.value })}
+                className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-4">
-            {DAY_LABELS.map((label, day) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() =>
-                  setNewPeakRule({
-                    ...newPeakRule,
-                    days_of_week: toggleDay(newPeakRule.days_of_week, day),
-                  })
-                }
-                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                  newPeakRule.days_of_week.includes(day)
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-slate-600 border-slate-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mb-4">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Days of week</span>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {DAY_LABELS.map((label, day) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() =>
+                    setNewPeakRule({
+                      ...newPeakRule,
+                      days_of_week: toggleDay(newPeakRule.days_of_week, day),
+                    })
+                  }
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                    newPeakRule.days_of_week.includes(day)
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-600 border-slate-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <button
