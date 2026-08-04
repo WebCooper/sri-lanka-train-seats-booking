@@ -1,4 +1,4 @@
-# Segment-Based Train Seat Booking (Colombo Fort - Badulla)
+# Segment-Based Train Seat Booking
 
 A train seat booking system for Sri Lanka’s Railway. A single reserved seat can be sold for multiple **non-overlapping** legs of the same journey, with each passenger charged only for the distance they travel.
 
