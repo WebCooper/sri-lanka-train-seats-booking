@@ -28,7 +28,31 @@ From a clean machine with only **Docker** installed:
 ```bash
 git clone https://github.com/WebCooper/sri-lanka-train-seats-booking
 cd sri-lanka-train-seats-booking
-cp .env.example .env          # then set BETTER_AUTH_SECRET (any long random string)
+```
+
+Create `.env` from the example, then set `BETTER_AUTH_SECRET` (any long random string):
+
+**macOS / Linux**
+
+```bash
+cp .env.example .env
+```
+
+**Windows (PowerShell)**
+
+```powershell
+Copy-Item .env.example .env
+```
+
+**Windows (Command Prompt)**
+
+```cmd
+copy .env.example .env
+```
+
+Then start the stack (all platforms):
+
+```bash
 docker compose up --build -d
 ```
 
@@ -127,14 +151,6 @@ Peak windows are configurable rules (time range + days of week). Admin can adjus
 
 Login → select origin, destination, and date → search schedules with available seats → open seat map → select seat (starts hold timer) → see fare quote → demo payment → booking confirmed for that coach seat on that schedule leg.
 
-## Challenges
-
-- **GiST exclusion with Prisma** - Prisma does not model exclusion constraints natively; the constraint is applied via raw SQL migration while the app writes `origin_position` / `destination_position` from line geometry in code.
-- **Correct adjacent-segment semantics** - half-open intervals must align with station ordering on the line; index bugs would either block valid adjacent bookings or allow silent overlaps.
-- **Hold expiry under load** - holds must expire reliably and free inventory before the next availability read; stale holds are swept on read and on a schedule-driven expiry update.
-- **Real-time feel without WebSockets** - the seat map polls every 7s and refreshes on window focus, with explicit loading, hold countdown, and “seat lost” states when a competitor takes a seat first.
-- **Past-departure booking and timezone-aware search** - schedule search originally matched only the selected calendar day (`departureTime` between midnight and end of day) without comparing against the current time. A train that departed at 6:00 AM could still appear in search results and be booked at 6:00 PM on the same day. The fix clamps the search lower bound to `now` when the requested date is today (or in the past), and rejects seat holds when `departureTime` has already passed. A related issue was that day boundaries were computed in UTC (`setUTCHours`), shifting the Colombo calendar day by 5.5 hours - e.g. searching “Aug 4” matched `00:00–23:59 UTC` instead of the local `00:00–23:59 +05:30` window. Day boundaries are now anchored to Asia/Colombo’s fixed `+05:30` offset so a searched date aligns with the local calendar day.
-
 ## Extra credit features
 
 ### 1. Seat map visualization
@@ -193,3 +209,10 @@ Login → select origin, destination, and date → search schedules with availab
 
 ![Recurring train schedule UI](figures/ui-for-easy-recurring-train-schedule.png)
 
+## Challenges
+
+- **GiST exclusion with Prisma** - Prisma does not model exclusion constraints natively; the constraint is applied via raw SQL migration while the app writes `origin_position` / `destination_position` from line geometry in code.
+- **Correct adjacent-segment semantics** - half-open intervals must align with station ordering on the line; index bugs would either block valid adjacent bookings or allow silent overlaps.
+- **Hold expiry under load** - holds must expire reliably and free inventory before the next availability read; stale holds are swept on read and on a schedule-driven expiry update.
+- **Real-time feel without WebSockets** - the seat map polls every 7s and refreshes on window focus, with explicit loading, hold countdown, and “seat lost” states when a competitor takes a seat first.
+- **Past-departure booking and timezone-aware search** - schedule search originally matched only the selected calendar day (`departureTime` between midnight and end of day) without comparing against the current time. A train that departed at 6:00 AM could still appear in search results and be booked at 6:00 PM on the same day. The fix clamps the search lower bound to `now` when the requested date is today (or in the past), and rejects seat holds when `departureTime` has already passed. A related issue was that day boundaries were computed in UTC (`setUTCHours`), shifting the Colombo calendar day by 5.5 hours - e.g. searching “Aug 4” matched `00:00–23:59 UTC` instead of the local `00:00–23:59 +05:30` window. Day boundaries are now anchored to Asia/Colombo’s fixed `+05:30` offset so a searched date aligns with the local calendar day.
