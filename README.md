@@ -1,6 +1,16 @@
 # Segment-Based Train Seat Booking — Colombo Fort–Badulla
 
-A production-minded booking system for Sri Lanka’s scenic Colombo Fort–Badulla line. A single reserved seat can be sold for multiple **non-overlapping** legs of the same journey, with each passenger charged only for the distance they travel.
+A train seat booking system for Sri Lanka’s Railway. A single reserved seat can be sold for multiple **non-overlapping** legs of the same journey, with each passenger charged only for the distance they travel.
+
+## Live deployment
+
+The database, backend API, passenger frontend, and admin frontend are deployed on an Ubuntu server:
+
+| Service | URL |
+|---------|-----|
+| Passenger frontend | https://train-seats.internalbuildtools.online/ |
+| Admin frontend | https://train-seats-admin.internalbuildtools.online/ |
+| API documentation | https://train-seats-api.internalbuildtools.online/docs |
 
 ## Stack
 
@@ -67,7 +77,7 @@ No manual `prisma migrate` / `prisma db push` step is required.
 
 The passenger app (`web/`) and admin app (`admin/`) are independent projects with their own builds and deploy targets. An admin change does not rebuild the passenger side, and passenger updates do not affect the admin side.
 
-**Why:** Admin and passenger UIs have different goals — SEO-friendly public booking vs. dense operational tooling. Splitting them keeps bundle sizes small, avoids shipping admin code to passengers, and lets each app evolve on its own release cycle.
+**Why:** Admin and passenger UIs have different goals. SEO-friendly public booking is needed for passengers. Admins are only using the ui as operational tooling. Splitting them keeps bundle sizes small, avoids shipping admin code to passengers, and lets each app evolve on its own release cycle.
 
 **Alternatives considered:**
 - **Single Next.js app with `/admin` routes** — simpler repo layout, but couples releases and ships admin JavaScript to all visitors.
@@ -75,7 +85,7 @@ The passenger app (`web/`) and admin app (`admin/`) are independent projects wit
 
 ### Next.js for passengers, Vite + React for admin
 
-Passengers need discoverable pages (routes, stations, contact). Next.js App Router gives server rendering and static generation for those surfaces. The admin dashboard is authenticated-only and prioritises fast iteration and rich forms — Vite + React fits that without SSR overhead.
+Passengers need discoverable pages (routes, stations, contact). Next.js App Router gives server rendering and static generation for those surfaces. The admin dashboard is authenticated-only and prioritises fast iteration and rich forms. Vite + React fits that without SSR overhead.
 
 **Alternatives considered:**
 - **Next.js for both** — viable, but admin would inherit Next.js complexity it does not need.
@@ -91,7 +101,7 @@ NestJS provides structured modules, dependency injection, and end-to-end TypeScr
 
 ### Better Auth for authentication
 
-Better Auth is database-agnostic and runs inside the NestJS backend. Sessions, users, and roles live in our PostgreSQL schema — no third-party auth vendor or external session store.
+Better Auth is database-agnostic and runs inside the NestJS backend. Sessions, users, and roles live in our PostgreSQL schema. No third party auth vendor or external session store.
 
 **Alternatives considered:**
 - **Auth0 / Firebase Auth** — faster to wire up, but adds vendor dependency, cost, and less control over session and role data.
@@ -103,7 +113,7 @@ Each booking leg is a **half-open interval** along the line: Colombo Fort → Ka
 
 Overlap detection uses: `existingStart < requestedEnd && requestedStart < existingEnd`.
 
-Holds and confirmed bookings are stored as `seat_segment_allocation` rows tied to a schedule, coach, and seat — passenger booking data stays separate from inventory state.
+Holds and confirmed bookings are stored as `seat_segment_allocation` rows tied to a schedule, coach, and seat. Passenger booking data stays separate from inventory state.
 
 **Alternatives considered:**
 - **Application-level locking only** — have race conditions under concurrent holds. Therefore rejected for production use.
@@ -138,6 +148,7 @@ Login → select origin, destination, and date → search schedules with availab
 - **Correct adjacent-segment semantics** — half-open intervals must align with station ordering on the line; index bugs would either block valid adjacent bookings or allow silent overlaps.
 - **Hold expiry under load** — holds must expire reliably and free inventory before the next availability read; stale holds are swept on read and on a schedule-driven expiry update.
 - **Real-time feel without WebSockets** — the seat map polls every 7s and refreshes on window focus, with explicit loading, hold countdown, and “seat lost” states when a competitor takes a seat first.
+- **Past-departure booking and timezone-aware search** — schedule search originally matched only the selected calendar day (`departureTime` between midnight and end of day) without comparing against the current time. A train that departed at 6:00 AM could still appear in search results and be booked at 6:00 PM on the same day. The fix clamps the search lower bound to `now` when the requested date is today (or in the past), and rejects seat holds when `departureTime` has already passed. A related issue was that day boundaries were computed in UTC (`setUTCHours`), shifting the Colombo calendar day by 5.5 hours — e.g. searching “Aug 4” matched `00:00–23:59 UTC` instead of the local `00:00–23:59 +05:30` window. Day boundaries are now anchored to Asia/Colombo’s fixed `+05:30` offset so a searched date aligns with the local calendar day.
 
 ## Extra credit features
 
@@ -161,9 +172,17 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Problem:** Under concurrency, users can select a seat that was just taken; the UI must communicate that clearly.
 
-**Solution:** Before starting a hold, the client refreshes availability. If the seat is gone, it shows a **lost** state on the map and an error message. While a hold is active, a countdown timer runs; on expiry the hold clears and the map refreshes. Background polling and focus-based refresh keep availability close to real time without WebSockets.
+**Solution:** Before starting a hold, the client refreshes availability. If the seat is gone, it shows a **lost** state on the map and an error message. While a hold is active, a countdown timer runs. On expiry the hold clears and the map refreshes. Background polling and focus-based refresh keep availability close to real time without WebSockets.
 
 ![UI improvement for conflictless booking](figures/ui-improvment-for-conflictless-booking.png)
+
+### Passenger booking history and e-tickets
+
+**Problem:** After booking, passengers need a single place to see reserved seats, trip details, and access their e-tickets.
+
+**Solution:** A **My Seat Reservations & E-Tickets** dashboard (`/dashboard/my-bookings`) lists every booking with status badges (**Upcoming** vs **Completed**), train and route details, coach, seat number, class, PNR, fare, and payment timestamp. A **Book New Seat** action starts another reservation from the same page.
+
+![Passenger previous bookings](figures/passenger-previous-bookings.png)
 
 ### Fare logic beyond distance-based pricing
 
@@ -173,5 +192,19 @@ Login → select origin, destination, and date → search schedules with availab
 
 ![Fare Calculation model](figures/fare-calculation-preview.png)
 
+### Train and coach configuration UI
 
-**Not implemented:** Waitlisting for fully booked segments — prioritised seat-map accuracy, admin reporting, and conflict-safe holds instead.
+**Problem:** Defining a new train fleet with multiple coaches and class, seat layout, capacity, and reservable vs unreserved.
+
+**Solution:** A **Configure New Train** modal in the admin portal that handles train identity, line route assignment, and full coach composition in one screen. Coaches are named automatically (`1005-A`, `1005-B`, …). Each coach card sets class (e.g. 1st Class AC Saloon, 2nd Class), seat layout (2+2), seat count, and whether it is reservable. A **Default Preset** applies a standard 8-coach layout in one click; **Add Coach** builds custom compositions. A live summary bar shows total coaches, reservable vs unreserved split, and fleet capacity before creation.
+
+![Configure new train UI](figures/configure-new-train.png)
+
+### Recurring train schedule UI
+
+**Problem:** Scheduling the same train on a route day after day requires creating each session one at a time. It is tedious for daily or weekday express services.
+
+**Solution:** A unified **Schedule New Train Session** modal in the admin portal with a **Recurring schedule** tab. Pick the line route and train fleet, set a date range, departure and arrival times, and select days of the week (with quick presets for every day, weekdays, or weekends). The UI previews how many sessions will be created before submission. E.g. 22 weekday sessions across a month in one action.
+
+![Recurring train schedule UI](figures/ui-for-easy-recurring-train-schedule.png)
+
