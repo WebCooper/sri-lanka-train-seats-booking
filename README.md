@@ -157,15 +157,23 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** A visual coach layout renders rows by coach configuration (e.g. 2+2 or 2+3), with colour states for available, selected, holding, occupied, and lost. Layout metrics adapt to coach class and orientation.
 
+The screenshot below shows the interactive coach map with class tabs, a 2+2 seat grid labelled front and back, and a colour legend for available, selected, held, and lost seats.
+
 ![Seat Map Visualization](figures/seat-map-visualization-2.png)
 
-### 2. Admin analytics dashboard
+### 2. Admin dashboard
 
-**Problem:** Operations staff need occupancy and revenue insight.
+**Problem:** A simple admin view is needed.
 
-**Solution:**  revenue over time, revenue by coach class and schedule, and **segment efficiency** (multi-segment seat reuse, average segments per seat, revenue captured from segment reuse).
+**Solution:**  Seperate dashboard is created for the administration to configure Lines, stations, trains, coaches, seats, fare parameters and to view revenue analytics.
+
+The landing screen below lists every admin module—train management, schedules, analytics, fare model, and more—with status badges and quick links to open each one.
 
 ![Simple Admin Dashboard](figures/simple-admin-dashboard.png)
+
+The revenue analytics view below charts gross revenue, booking counts, and segment-efficiency metrics, with filters for date range, line, and granularity.
+
+![Admin revenue Dashboard](figures/admin-dashboard.png)
 
 ### 3. Conflict-aware booking UI
 
@@ -173,7 +181,11 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** Before starting a hold, the client refreshes availability. If the seat is gone, it shows a **lost** state on the map and an error message. While a hold is active, a countdown timer runs. On expiry the hold clears and the map refreshes. Background polling and focus-based refresh keep availability close to real time without WebSockets.
 
+When a passenger holds a seat, the screenshot below shows the selected seat highlighted in green on the map, a 10-minute countdown in the hold banner, and a floating “Pay now” prompt to complete the booking.
+
 ![UI improvement for conflictless booking](figures/seat-booking.png)
+
+If another user takes the same seat first, the UI in the screenshot below marks the seat in red and displays an overlap error explaining the hold or booking conflict on that schedule segment.
 
 ![Handled conflict when same time hold triggers](figures/seat-booking-conflict-handling.png)
 
@@ -183,6 +195,8 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** A **My Seat Reservations & E-Tickets** dashboard (`/dashboard/my-bookings`) lists every booking with status badges (**Upcoming** vs **Completed**), train and route details, coach, seat number, class, PNR, fare, and payment timestamp. A **Book New Seat** action starts another reservation from the same page.
 
+The My Bookings page in the screenshot below lists upcoming and completed reservations as e-ticket cards with coach, seat, class, PNR, fare, and a link to view each ticket.
+
 ![Passenger previous bookings](figures/passenger-previous-bookings.png)
 
 ### 5. Fare logic beyond distance-based pricing
@@ -190,6 +204,8 @@ Login → select origin, destination, and date → search schedules with availab
 **Problem:** Simple per-km pricing ignores coach class and peak demand.
 
 **Solution:** Configurable flat fee, per-km rate, per-coach-class multipliers, and peak-hour rules with day-of-week filters. Passengers see a full quote breakdown; admins manage the model and run test quotes from the Fare Model module.
+
+The fare model screen below lets admins set base fees, per-km rates, and coach-class multipliers on the left, then run a quote preview on the right with a full fare breakdown.
 
 ![Fare Calculation model](figures/fare-calculation-preview.png)
 
@@ -199,6 +215,8 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** A **Configure New Train** modal in the admin portal that handles train identity, line route assignment, and full coach composition in one screen. Coaches are named automatically (`1005-A`, `1005-B`, …). Each coach card sets class (e.g. 1st Class, 2nd Class), seat layout (2+2), seat count, and whether it is reservable. A **Default Preset** applies a standard 8-coach layout in one click; **Add Coach** builds custom compositions. A live summary bar shows total coaches, reservable vs unreserved split, and fleet capacity before creation.
 
+The Configure New Train modal in the screenshot below combines train identity, line route assignment, and per-coach class, layout, capacity, and reservable settings with a live fleet summary bar.
+
 ![Configure new train UI](figures/configure-new-train.png)
 
 ### 7. Recurring train schedule UI
@@ -206,6 +224,8 @@ Login → select origin, destination, and date → search schedules with availab
 **Problem:** Scheduling the same train on a route day after day requires creating each session one at a time. It is tedious for daily or weekday express services.
 
 **Solution:** A unified **Schedule New Train Session** modal in the admin portal with a **Recurring schedule** tab. Pick the line route and train fleet, set a date range, departure and arrival times, and select days of the week (with quick presets for every day, weekdays, or weekends). The UI previews how many sessions will be created before submission. E.g. 22 weekday sessions across a month in one action.
+
+The recurring schedule tab in the screenshot below previews how many sessions will be created—e.g. 22 weekday runs—before admins submit a date range, times, and day-of-week selection.
 
 ![Recurring train schedule UI](figures/ui-for-easy-recurring-train-schedule.png)
 
