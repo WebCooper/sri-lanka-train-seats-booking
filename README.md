@@ -122,14 +122,12 @@ Each booking leg is a **half-open interval** along the line: Colombo Fort → Ka
 
 Overlap detection uses: `existingStart < requestedEnd && requestedStart < existingEnd`.
 
-Holds and confirmed bookings are stored as `seat_segment_allocation` rows tied to a schedule, coach, and seat. Passenger booking data stays separate from inventory state.
-
 **Alternatives considered:**
 - **Application-level locking only** - have race conditions under concurrent holds. Therefore rejected for production use.
 
 ### 6. Concurrency and conflict handling
 
-Overlapping segments on the same seat are rejected **atomically at the database** using a PostgreSQL GiST exclusion constraint (`seat_segment_allocation_no_overlap` with `btree_gist`). Even if two requests pass application checks simultaneously, only one insert succeeds.
+Overlapping segments on the same seat are rejected **atomically at the database** using a PostgreSQL GiST exclusion constraint. Even if two requests pass application checks simultaneously, only one insert succeeds.
 
 The API also expires stale holds before availability checks and maps constraint violations to clear 409 responses.
 
@@ -157,27 +155,28 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Problem:** A list of seat numbers does not match how passengers think about a coach.
 
-**Solution:** A visual coach layout (`web/components/SeatMap.tsx`) renders rows by coach configuration (e.g. 2+2), with colour states for available, selected, holding, occupied, and lost. Layout metrics adapt to coach class and orientation.
+**Solution:** A visual coach layout renders rows by coach configuration (e.g. 2+2 or 2+3), with colour states for available, selected, holding, occupied, and lost. Layout metrics adapt to coach class and orientation.
 
-![Seat Map Visualization](figures/seat-map-visualization.png)
+![Seat Map Visualization](figures/seat-map-visualization-2.png)
 
 ### 2. Admin analytics dashboard
 
-**Problem:** Operations staff need occupancy and revenue insight, not just CRUD screens.
+**Problem:** Operations staff need occupancy and revenue insight.
 
-**Solution:** An admin hub (`admin/`) with modules for trains, schedules, fare model, and **Analytics & Reports** - revenue over time, revenue by coach class and schedule, and **segment efficiency** (multi-segment seat reuse, average segments per seat, revenue captured from segment reuse).
+**Solution:**  revenue over time, revenue by coach class and schedule, and **segment efficiency** (multi-segment seat reuse, average segments per seat, revenue captured from segment reuse).
 
 ![Simple Admin Dashboard](figures/simple-admin-dashboard.png)
 
 ### 3. Conflict-aware booking UI
 
-**Problem:** Under concurrency, users can select a seat that was just taken; the UI must communicate that clearly.
+**Problem:** Under concurrency, users can select a seat that was just taken. The UI must communicate that clearly.
 
 **Solution:** Before starting a hold, the client refreshes availability. If the seat is gone, it shows a **lost** state on the map and an error message. While a hold is active, a countdown timer runs. On expiry the hold clears and the map refreshes. Background polling and focus-based refresh keep availability close to real time without WebSockets.
 
-![UI improvement for conflictless booking](figures/ui-improvment-for-conflictless-booking.png)
+![UI improvement for conflictless booking](figures\seat-booking.jpeg)
+![Handled conflict when same time hold triggers](figures\seat-booking-conflict-handling.png)
 
-### 4. Passenger booking history and e-tickets
+### 4. Passenger booking history
 
 **Problem:** After booking, passengers need a single place to see reserved seats, trip details, and access their e-tickets.
 
@@ -197,7 +196,7 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Problem:** Defining a new train fleet with multiple coaches and class, seat layout, capacity, and reservable vs unreserved.
 
-**Solution:** A **Configure New Train** modal in the admin portal that handles train identity, line route assignment, and full coach composition in one screen. Coaches are named automatically (`1005-A`, `1005-B`, …). Each coach card sets class (e.g. 1st Class AC Saloon, 2nd Class), seat layout (2+2), seat count, and whether it is reservable. A **Default Preset** applies a standard 8-coach layout in one click; **Add Coach** builds custom compositions. A live summary bar shows total coaches, reservable vs unreserved split, and fleet capacity before creation.
+**Solution:** A **Configure New Train** modal in the admin portal that handles train identity, line route assignment, and full coach composition in one screen. Coaches are named automatically (`1005-A`, `1005-B`, …). Each coach card sets class (e.g. 1st Class, 2nd Class), seat layout (2+2), seat count, and whether it is reservable. A **Default Preset** applies a standard 8-coach layout in one click; **Add Coach** builds custom compositions. A live summary bar shows total coaches, reservable vs unreserved split, and fleet capacity before creation.
 
 ![Configure new train UI](figures/configure-new-train.png)
 
