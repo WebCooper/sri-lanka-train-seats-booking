@@ -167,7 +167,7 @@ The screenshot below shows the interactive coach map with class tabs, a 2+2 seat
 
 **Solution:**  Seperate dashboard is created for the administration to configure Lines, stations, trains, coaches, seats, fare parameters and to view revenue analytics.
 
-The landing screen below lists every admin module—train management, schedules, analytics, fare model, and more—with status badges and quick links to open each one.
+The landing screen below lists every admin module. Train management, schedules, analytics, fare model and quick links to open each one.
 
 ![Simple Admin Dashboard](figures/simple-admin-dashboard.png)
 
