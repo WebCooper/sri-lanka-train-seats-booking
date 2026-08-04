@@ -225,7 +225,7 @@ The Configure New Train modal in the screenshot below combines train identity, l
 
 **Solution:** A unified **Schedule New Train Session** modal in the admin portal with a **Recurring schedule** tab. Pick the line route and train fleet, set a date range, departure and arrival times, and select days of the week (with quick presets for every day, weekdays, or weekends). The UI previews how many sessions will be created before submission. E.g. 22 weekday sessions across a month in one action.
 
-The recurring schedule tab in the screenshot below previews how many sessions will be created—e.g. 22 weekday runs—before admins submit a date range, times, and day-of-week selection.
+The recurring schedule tab in the screenshot below previews how many sessions will be created.
 
 ![Recurring train schedule UI](figures/ui-for-easy-recurring-train-schedule.png)
 
