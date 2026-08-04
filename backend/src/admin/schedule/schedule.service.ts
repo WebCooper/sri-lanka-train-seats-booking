@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { prisma } from '../../../lib/prisma';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { BulkCreateScheduleDto } from './dto/bulk-create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { QueryScheduleDto } from './dto/query-schedule.dto';
 
@@ -138,6 +139,116 @@ export class ScheduleService {
     });
 
     return this.formatScheduleResponse(createdSchedule);
+  }
+
+  /**
+   * Schedule multiple train sessions at once
+   */
+  async createBulkSchedules(dto: BulkCreateScheduleDto): Promise<{
+    created: Awaited<ReturnType<ScheduleService['createSchedule']>>[];
+    skipped: Array<{ departure_time: string; arrival_time: string; reason: string }>;
+    total_created: number;
+    total_skipped: number;
+  }> {
+    const [line, train] = await Promise.all([
+      prisma.line.findUnique({ where: { id: dto.line_id } }),
+      prisma.train.findUnique({ where: { id: dto.train_id } }),
+    ]);
+
+    if (!line) {
+      throw new NotFoundException(`Train line with ID "${dto.line_id}" not found`);
+    }
+
+    if (!train) {
+      throw new NotFoundException(`Train with ID "${dto.train_id}" not found`);
+    }
+
+    const scheduleInclude = {
+      line: {
+        include: {
+          startStation: true,
+          endStation: true,
+        },
+      },
+      train: {
+        include: {
+          coaches: {
+            include: { coach: true },
+          },
+        },
+      },
+    };
+
+    const created: Awaited<ReturnType<ScheduleService['createSchedule']>>[] = [];
+    const skipped: Array<{ departure_time: string; arrival_time: string; reason: string }> = [];
+    const createdWindows: Array<{ departureTime: Date; arrivalTime: Date }> = [];
+
+    for (const session of dto.sessions) {
+      const departureTime = new Date(session.departure_time);
+      const arrivalTime = new Date(session.arrival_time);
+
+      if (isNaN(departureTime.getTime()) || isNaN(arrivalTime.getTime())) {
+        skipped.push({
+          departure_time: session.departure_time,
+          arrival_time: session.arrival_time,
+          reason: 'Invalid departure or arrival date format',
+        });
+        continue;
+      }
+
+      if (departureTime >= arrivalTime) {
+        skipped.push({
+          departure_time: session.departure_time,
+          arrival_time: session.arrival_time,
+          reason: 'Arrival time must be strictly after departure time',
+        });
+        continue;
+      }
+
+      const overlappingSchedule = await prisma.schedule.findFirst({
+        where: {
+          trainId: dto.train_id,
+          departureTime: { lt: arrivalTime },
+          arrivalTime: { gt: departureTime },
+        },
+      });
+
+      const overlapsBatch = createdWindows.some(
+        (window) =>
+          window.departureTime < arrivalTime && window.arrivalTime > departureTime,
+      );
+
+      if (overlappingSchedule || overlapsBatch) {
+        skipped.push({
+          departure_time: session.departure_time,
+          arrival_time: session.arrival_time,
+          reason: overlappingSchedule
+            ? `Train "${train.name}" (${train.trainNumber}) already has an overlapping schedule`
+            : 'Overlaps with another session in this batch',
+        });
+        continue;
+      }
+
+      const createdSchedule = await prisma.schedule.create({
+        data: {
+          lineId: dto.line_id,
+          trainId: dto.train_id,
+          departureTime,
+          arrivalTime,
+        },
+        include: scheduleInclude,
+      });
+
+      createdWindows.push({ departureTime, arrivalTime });
+      created.push(this.formatScheduleResponse(createdSchedule));
+    }
+
+    return {
+      created,
+      skipped,
+      total_created: created.length,
+      total_skipped: skipped.length,
+    };
   }
 
   /**

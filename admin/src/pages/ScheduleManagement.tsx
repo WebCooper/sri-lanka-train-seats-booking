@@ -16,13 +16,15 @@ import {
 } from 'lucide-react';
 import { 
   fetchSchedulesApi, 
-  createScheduleApi, 
+  createScheduleApi,
+  createBulkSchedulesApi,
   updateScheduleApi, 
   deleteScheduleApi 
 } from '../api/scheduleManagementApi';
 import type { 
   ScheduleItem, 
-  CreateSchedulePayload, 
+  CreateSchedulePayload,
+  BulkCreateSchedulePayload,
   UpdateSchedulePayload 
 } from '../api/scheduleManagementApi';
 import { fetchLinesApi, fetchTrainsApi } from '../api/trainManagementApi';
@@ -111,6 +113,24 @@ export const ScheduleManagement: React.FC = () => {
       loadSchedules(page, selectedLineFilter);
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, 'Failed to schedule train session.'));
+      throw err;
+    }
+  };
+
+  const handleBulkCreateScheduleSubmit = async (payload: BulkCreateSchedulePayload) => {
+    try {
+      const result = await createBulkSchedulesApi(payload);
+      if (result.total_created > 0) {
+        toast.success(`${result.total_created} train session(s) scheduled successfully.`);
+      }
+      if (result.total_skipped > 0) {
+        toast.error(
+          `${result.total_skipped} session(s) were skipped due to conflicts or invalid times.`,
+        );
+      }
+      loadSchedules(page, selectedLineFilter);
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, 'Failed to schedule train sessions.'));
       throw err;
     }
   };
@@ -399,6 +419,7 @@ export const ScheduleManagement: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSaveCreate={handleCreateScheduleSubmit}
+        onSaveBulkCreate={handleBulkCreateScheduleSubmit}
         onSaveUpdate={handleUpdateScheduleSubmit}
         lines={lines}
         trains={trains}
