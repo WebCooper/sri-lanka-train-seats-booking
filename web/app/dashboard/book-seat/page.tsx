@@ -9,6 +9,7 @@ import { CoachSelector } from '../../../components/CoachSelector';
 import { SeatMap } from '../../../components/SeatMap';
 import { StationCombobox } from '../../../components/StationCombobox';
 import { HoldTimerPopup } from '../../../components/HoldTimerPopup';
+import { HERO_SEARCH_STORAGE_KEY } from '../../../components/HeroSearchBar';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { usePassengerAuth } from '../../../context/PassengerAuthContext';
 import toast from 'react-hot-toast';
@@ -241,6 +242,35 @@ export default function BookSeatPage() {
     };
 
     bootstrap();
+  }, []);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(HERO_SEARCH_STORAGE_KEY);
+    if (!raw) {
+      return;
+    }
+
+    sessionStorage.removeItem(HERO_SEARCH_STORAGE_KEY);
+
+    try {
+      const parsed = JSON.parse(raw) as {
+        originId?: string;
+        destinationId?: string;
+        travelDate?: string;
+      };
+
+      if (parsed.originId) {
+        setOriginId(parsed.originId);
+      }
+      if (parsed.destinationId) {
+        setDestinationId(parsed.destinationId);
+      }
+      if (parsed.travelDate) {
+        setTravelDate(parsed.travelDate);
+      }
+    } catch {
+      // Ignore invalid hero search payload
+    }
   }, []);
 
   useEffect(() => {

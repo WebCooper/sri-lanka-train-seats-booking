@@ -3,8 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Train, User, LogOut, ArrowRight } from 'lucide-react';
+import { User, LogOut, ArrowRight } from 'lucide-react';
 import { usePassengerAuth } from '../context/PassengerAuthContext';
+import { BrandLogo } from './BrandLogo';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
@@ -19,20 +20,7 @@ export const Navbar: React.FC = () => {
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-50 transition-all">
       <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        {/* Brand Logo */}
-        <Link href="/" className="flex items-center gap-3 no-underline group">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 group-hover:scale-105 transition-all">
-            <Train className="w-6 h-6" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-extrabold text-lg text-slate-900 tracking-tight leading-none group-hover:text-indigo-600 transition-colors">
-              Sri Lanka Railways
-            </span>
-            <span className="text-[11px] text-slate-500 font-medium tracking-wide uppercase mt-0.5">
-              Online Seat Booking Portal
-            </span>
-          </div>
-        </Link>
+        <BrandLogo />
 
         {/* Center Nav Links */}
         <nav className="hidden md:flex items-center gap-8">

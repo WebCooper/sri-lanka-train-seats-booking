@@ -2,7 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Train, Phone, Mail, MapPin, ShieldCheck, Heart } from 'lucide-react';
+import { Phone, Mail, MapPin, ShieldCheck } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 export const Footer: React.FC = () => {
   return (
@@ -10,15 +11,7 @@ export const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-6 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         {/* Brand Column */}
         <div className="flex flex-col gap-4 md:col-span-1">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-              <Train className="w-5 h-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-base text-white">Sri Lanka Railways</span>
-              <span className="text-[10px] text-slate-400">Official Seat Booking System</span>
-            </div>
-          </div>
+          <BrandLogo imageClassName="h-10 w-auto" inverted />
           <p className="text-slate-400 leading-relaxed">
             Reserve train seats online, view real-time train schedules, and manage e-tickets for comfortable travel across Sri Lanka.
           </p>
