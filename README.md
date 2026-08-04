@@ -32,12 +32,6 @@ cp .env.example .env          # then set BETTER_AUTH_SECRET (any long random str
 docker compose up --build -d
 ```
 
-That single command is fully self-contained:
-
-1. **postgres** starts and becomes healthy.
-2. **migrate** runs `prisma migrate deploy` to create all tables, then seeds stations and the fare model, a demo passenger, a demo administrator and exits.
-3. **backend**, **admin**, and **web** start only after the migration & seed completes.
-
 | Service | URL |
 |---------|-----|
 | Passenger Frontend | http://localhost:3000 |
