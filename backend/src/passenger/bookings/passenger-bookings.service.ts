@@ -93,6 +93,11 @@ export class PassengerBookingService {
     if (!schedule) {
       throw new NotFoundException(`Schedule session with ID "${schedule_id}" not found`);
     }
+    if (schedule.departureTime <= new Date()) {
+      throw new BadRequestException(
+        'This train has already departed and can no longer be booked.',
+      );
+    }
     if (!coach) {
       throw new NotFoundException(`Coach with ID "${coach_id}" not found`);
     }

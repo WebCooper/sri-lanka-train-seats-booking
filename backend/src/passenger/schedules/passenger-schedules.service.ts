@@ -27,6 +27,13 @@ type ScheduleWithRelations = Awaited<
   ReturnType<PassengerScheduleService['fetchScheduleById']>
 >;
 
+/**
+ * Fixed UTC offset for Sri Lanka (Asia/Colombo). Sri Lanka has observed a
+ * constant +05:30 offset with no daylight saving since 2006, so a fixed offset
+ * is sufficient to map a local calendar day to its UTC boundaries.
+ */
+const COLOMBO_UTC_OFFSET = '+05:30';
+
 @Injectable()
 export class PassengerScheduleService {
   constructor(private readonly segmentAllocation: SegmentAllocationService) {}
@@ -106,6 +113,12 @@ export class PassengerScheduleService {
 
     const { startDate, endDate } = this.resolveDateRange(date);
 
+    // Never return trains that have already departed. If the requested day is
+    // today (or in the past), clamp the lower bound to the current time so that
+    // past departures are excluded from the results.
+    const now = new Date();
+    const effectiveStart = startDate > now ? startDate : now;
+
     const [origin, destination] = await Promise.all([
       prisma.station.findUnique({ where: { id: origin_id } }),
       prisma.station.findUnique({ where: { id: destination_id } }),
@@ -150,7 +163,7 @@ export class PassengerScheduleService {
       where: {
         lineId: { in: validLineIds },
         departureTime: {
-          gte: startDate,
+          gte: effectiveStart,
           lte: endDate,
         },
       },
@@ -304,12 +317,19 @@ export class PassengerScheduleService {
     });
   }
 
+  /**
+   * Resolve the UTC instants that bound a local (Asia/Colombo) calendar day.
+   * The incoming `date` is a "YYYY-MM-DD" string interpreted in Colombo local
+   * time, so we anchor the day boundaries to the +05:30 offset before comparing
+   * against the UTC `departureTime` values stored in the database.
+   */
   private resolveDateRange(date: string) {
-    const startDate = new Date(date);
-    startDate.setUTCHours(0, 0, 0, 0);
+    const startDate = new Date(`${date}T00:00:00.000${COLOMBO_UTC_OFFSET}`);
+    const endDate = new Date(`${date}T23:59:59.999${COLOMBO_UTC_OFFSET}`);
 
-    const endDate = new Date(date);
-    endDate.setUTCHours(23, 59, 59, 999);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('date must be a valid date string (YYYY-MM-DD)');
+    }
 
     return { startDate, endDate };
   }
