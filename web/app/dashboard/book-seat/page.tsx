@@ -266,7 +266,8 @@ export default function BookSeatPage() {
         setDestinationId(parsed.destinationId);
       }
       if (parsed.travelDate) {
-        setTravelDate(parsed.travelDate);
+        const today = todayIsoDate();
+        setTravelDate(parsed.travelDate < today ? today : parsed.travelDate);
       }
     } catch {
       // Ignore invalid hero search payload
@@ -338,6 +339,11 @@ export default function BookSeatPage() {
 
     if (!travelDate) {
       setSearchError('Please select a travel date.');
+      return;
+    }
+
+    if (travelDate < todayIsoDate()) {
+      setSearchError('Travel date cannot be in the past.');
       return;
     }
 
@@ -623,7 +629,11 @@ export default function BookSeatPage() {
                     type="date"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-indigo-600 focus:bg-white"
                     value={travelDate}
-                    onChange={(event) => setTravelDate(event.target.value)}
+                    min={todayIsoDate()}
+                    onChange={(event) => {
+                      setTravelDate(event.target.value);
+                      setSearchError(null);
+                    }}
                   />
                 </div>
               </div>
