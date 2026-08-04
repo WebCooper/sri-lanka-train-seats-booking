@@ -171,7 +171,7 @@ Login → select origin, destination, and date → search schedules with availab
 
 **Solution:** Configurable flat fee, per-km rate, per-coach-class multipliers, and peak-hour rules with day-of-week filters. Passengers see a full quote breakdown; admins manage the model and run test quotes from the Fare Model module.
 
-![Fare Calculation model](figures\fare-calculation-preview.png)
+![Fare Calculation model](figures/fare-calculation-preview.png)
 
 
 **Not implemented:** Waitlisting for fully booked segments — prioritised seat-map accuracy, admin reporting, and conflict-safe holds instead.
